@@ -1,11 +1,13 @@
 import re
+import random
 
 
 def extract_solution(solution_str):
     answer_pattern = r'<answer>(.*?)</answer>'
-    match = re.search(answer_pattern, solution_str)
-    if match:
-        final_answer = match.group(1).strip()
+    match = re.finditer(answer_pattern, solution_str)
+    matches = list(match)
+    if matches:
+        final_answer = matches[-1].group(1).strip()
     else:
         final_answer = None
     return final_answer
@@ -24,6 +26,11 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.05
         score: the score for the correct answer
     """
     answer = extract_solution(solution_str=solution_str)
+    if random.randint(1, 128) == 1:
+        print(f"--------------------------------")
+        print(f"Ground truth: {ground_truth} | Extracted answer: {answer}")
+        print(f"Solution string: {solution_str}")
+
     if answer is None:
         return 0
     else:
