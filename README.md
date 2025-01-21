@@ -1,103 +1,64 @@
-<h1 style="text-align: center;">veRL: Volcano Engine Reinforcement Learning for LLM</h1>
+See [OLD_README.md](OLD_README.md)
 
-veRL is a flexible, efficient and production-ready RL training framework designed for large language models (LLMs). 
+## Instalation
+```
+conda create -n zero python=3.9
+# install torch [or you can skip this step and let vllm to install the correct version for you]
+pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
 
-veRL is the open-source version of **[HybridFlow: A Flexible and Efficient RLHF Framework](https://arxiv.org/abs/2409.19256v2)** paper.
+# install vllm
+pip3 install vllm==0.6.3 # or you can install 0.5.4, 0.4.2 and 0.3.1
+pip3 install ray
 
-veRL is flexible and easy to use with:
+# flash attention 2
+pip3 install flash-attn --no-build-isolation
 
-- **Easy extension of diverse RL algorithms**: The Hybrid programming model combines the strengths of single-controller and multi-controller paradigms to enable flexible representation and efficient execution of complex Post-Training dataflows. Allowing users to build RL dataflows in a few lines of code.
-
-- **Seamless integration of existing LLM infra with modular APIs**: Decouples computation and data dependencies, enabling seamless integration with existing LLM frameworks, such as PyTorch FSDP, Megatron-LM and vLLM. Moreover, users can easily extend to other LLM training and inference frameworks.
-
-- **Flexible device mapping**: Supports various placement of models onto different sets of GPUs for efficient resource utilization and scalability across different cluster sizes.
-
-- Readily integration with popular HuggingFace models
-
-
-veRL is fast with:
-
-- **State-of-the-art throughput**: By seamlessly integrating existing SOTA LLM training and inference frameworks, veRL achieves high generation and training throughput.
-
-- **Efficient actor model resharding with 3D-HybridEngine**: Eliminates memory redundancy and significantly reduces communication overhead during transitions between training and generation phases.
-
-<p align="center">
-| <a href="https://verl.readthedocs.io/en/latest/index.html"><b>Documentation</b></a> | <a href="https://arxiv.org/abs/2409.19256v2"><b>Paper</b></a> | <a href="https://join.slack.com/t/verlgroup/shared_invite/zt-2w5p9o4c3-yy0x2Q56s_VlGLsJ93A6vA"><b>Slack</b></a> | <a href="https://raw.githubusercontent.com/eric-haibin-lin/verl-community/refs/heads/main/WeChat.JPG"><b>Wechat</b></a> | 
-
-<!-- <a href=""><b>Slides</b></a> | -->
-</p>
-
-## News
-
-- [2024/12] The team presented <a href="https://neurips.cc/Expo/Conferences/2024/workshop/100677">Post-training LLMs: From Algorithms to Infrastructure</a> at NeurIPS 2024. [Slides](https://github.com/eric-haibin-lin/verl-data/tree/neurips) and [video](https://neurips.cc/Expo/Conferences/2024/workshop/100677) available.
-- [2024/10] veRL is presented at Ray Summit. [Youtube video](https://www.youtube.com/watch?v=MrhMcXkXvJU&list=PLzTswPQNepXntmT8jr9WaNfqQ60QwW7-U&index=37) available.
-- [2024/08] HybridFlow (verl) is accepted to EuroSys 2025.
-
-## Key Features
-
-- **FSDP** and **Megatron-LM** for training.
-- **vLLM** and **TGI** for rollout generation, **SGLang** support coming soon.
-- huggingface models support
-- Supervised fine-tuning
-- Reward model training
-- Reinforcement learning from human feedback with PPO
-- flash-attention integration, sequence packing
-- scales up to 70B models and hundreds of GPUs
-- experiment tracking with wandb and mlflow
-
-
-## Getting Started
-
-Checkout this [Jupyter Notebook](https://github.com/volcengine/verl/tree/main/examples/ppo_trainer/verl_getting_started.ipynb) to get started with PPO training with a single 24GB L4 GPU (**FREE** GPU quota provided by [Lighting Studio](https://lightning.ai/hlin-verl/studios/verl-getting-started))!
-
-**Quickstart:**
-- [Installation](https://verl.readthedocs.io/en/latest/start/install.html)
-- [Quickstart](https://verl.readthedocs.io/en/latest/start/quickstart.html)
-
-**Running an PPO example step-by-step:**
-- Data and Reward Preparation
-  - [Prepare Data (Parquet) for Post-Training](https://verl.readthedocs.io/en/latest/preparation/prepare_data.html)
-  - [Implement Reward Function for Dataset](https://verl.readthedocs.io/en/latest/preparation/reward_function.html)
-- Understanding the PPO Example
-  - [PPO Example Architecture](https://verl.readthedocs.io/en/latest/examples/ppo_code_architecture.html)
-  - [Config Explanation](https://verl.readthedocs.io/en/latest/examples/config.html)
-  - [Run GSM8K Example](https://verl.readthedocs.io/en/latest/examples/gsm8k_example.html)
-
-**Reproducible algorithm baselines:**
-- [PPO](https://verl.readthedocs.io/en/latest/experiment/ppo.html)
-
-**For code explanation and advance usage (extension):**
-- PPO Trainer and Workers
-  - [PPO Ray Trainer](https://verl.readthedocs.io/en/latest/workers/ray_trainer.html)
-  - [PyTorch FSDP Backend](https://verl.readthedocs.io/en/latest/workers/fsdp_workers.html)
-  - [Megatron-LM Backend](https://verl.readthedocs.io/en/latest/index.html)
-- Advance Usage and Extension
-  - [Ray API Design Tutorial](https://verl.readthedocs.io/en/latest/advance/placement.html)
-  - [Extend to other RL(HF) algorithms](https://verl.readthedocs.io/en/latest/advance/dpo_extension.html)
-  - [Add models with the FSDP backend](https://verl.readthedocs.io/en/latest/advance/fsdp_extension.html)
-  - [Add models with the Megatron-LM backend](https://verl.readthedocs.io/en/latest/advance/megatron_extension.html)
-
-
-## Citation and acknowledgement
-
-If you find the project helpful, please cite:
-- [HybridFlow: A Flexible and Efficient RLHF Framework](https://arxiv.org/abs/2409.19256v2)
-- [A Framework for Training Large Language Models for Code Generation via Proximal Policy Optimization](https://i.cs.hku.hk/~cwu/papers/gmsheng-NL2Code24.pdf)
-
-```tex
-@article{sheng2024hybridflow,
-  title   = {HybridFlow: A Flexible and Efficient RLHF Framework},
-  author  = {Guangming Sheng and Chi Zhang and Zilingfeng Ye and Xibin Wu and Wang Zhang and Ru Zhang and Yanghua Peng and Haibin Lin and Chuan Wu},
-  year    = {2024},
-  journal = {arXiv preprint arXiv: 2409.19256}
-}
+# quality of life
+pip install wandb IPython matplotlib
 ```
 
-verl is inspired by the design of Nemo-Aligner, Deepspeed-chat and OpenRLHF. The project is adopted and supported by Anyscale, Bytedance, LMSys.org, Shanghai AI Lab, Tsinghua University, UC Berkeley, UCLA, UIUC, and University of Hong Kong.
+## Generate Data
+```
+conda activate zero
+python verl/examples/data_preprocess/arth.py
+```
 
-## Publications Using veRL
-- [Enhancing Multi-Step Reasoning Abilities of Language Models through Direct Q-Function Optimization](https://arxiv.org/abs/2410.09302)
-- [Flaming-hot Initiation with Regular Execution Sampling for Large Language Models](https://arxiv.org/abs/2410.21236)
-- [Process Reinforcement Through Implicit Rewards](https://github.com/PRIME-RL/PRIME/)
-
-We are HIRING! Send us an [email](mailto:haibin.lin@bytedance.com) if you are interested in internship/FTE opportunities in MLSys/LLM reasoning/multimodal alignment.
+## Run Training
+```
+conda activate zero
+```
+```
+export CUDA_VISIBLE_DEVICES=7
+export N_GPUS=1
+export BASE_MODEL=Qwen/Qwen2.5-0.5B
+export DATA_DIR=$HOME/data/arithmetic-3_digit
+PYTHONUNBUFFERE=1 python3 -m verl.trainer.main_ppo \
+ data.train_files=$DATA_DIR/train.parquet \
+ data.val_files=$DATA_DIR/test.parquet \
+ data.train_batch_size=256 \
+ data.val_batch_size=1312 \
+ data.max_prompt_length=256 \
+ data.max_response_length=1024 \
+ actor_rollout_ref.model.path=$BASE_MODEL \
+ actor_rollout_ref.actor.optim.lr=1e-6 \
+ actor_rollout_ref.actor.ppo_mini_batch_size=64 \
+ actor_rollout_ref.actor.ppo_micro_batch_size=4 \
+ actor_rollout_ref.rollout.log_prob_micro_batch_size=8 \
+ actor_rollout_ref.rollout.tensor_model_parallel_size=$N_GPUS \
+ actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+ actor_rollout_ref.ref.log_prob_micro_batch_size=4 \
+ critic.optim.lr=1e-5 \
+ critic.model.path=$BASE_MODEL \
+ critic.ppo_micro_batch_size=8 \
+ algorithm.kl_ctrl.kl_coef=0.001 \
+ trainer.logger=['wandb'] \
+ +trainer.val_before_train=False \
+ trainer.default_hdfs_dir=null \
+ trainer.n_gpus_per_node=$N_GPUS \
+ trainer.nnodes=1 \
+ trainer.save_freq=10 \
+ trainer.test_freq=10 \
+ trainer.project_name=zero \
+ trainer.experiment_name=multi \
+ trainer.total_epochs=15 2>&1 | tee verl_demo.log
+```
