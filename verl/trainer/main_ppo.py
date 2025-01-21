@@ -26,7 +26,7 @@ def _select_rm_score_fn(data_source):
         return gsm8k.compute_score
     elif data_source == 'lighteval/MATH':
         return math.compute_score
-    elif "multiply" in data_source:
+    elif "multiply" in data_source or "arithmetic" in data_source:
         return multiply.compute_score
     else:
         raise NotImplementedError
