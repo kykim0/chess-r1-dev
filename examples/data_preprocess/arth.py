@@ -23,7 +23,7 @@ from verl.utils.hdfs_io import copy, makedirs
 import argparse
 
 
-from random import randint, seed
+from random import randint, seed, choice
 from tqdm import tqdm
 
 def gen_dataset(
@@ -31,9 +31,14 @@ def gen_dataset(
     DIGIT,
     LESS_OR_EQUAL=True,
 ):
+    """
+    any score <0.4 is ok, since +- is easy
+    the model have 
+    """
     seed(1)
-    # Generate N pairs of 4-digit numbers and their products
+    # Generate N pairs of numbers and their results for different operations
     equations = []
+    operations = ['*', '+', '-', '*', '*']
     for _ in tqdm(range(N)):
         # Helper function to generate a number with 50% chance of being N-digit or N/2-digit
         def get_random_num():
@@ -53,33 +58,38 @@ def gen_dataset(
         # Generate two numbers independently
         num1 = get_random_num()
         num2 = get_random_num()
-        # Calculate their product
-        result = num1 * num2
-        equations.append((num1, num2, result))
+        # Randomly choose operation
+        op = choice(operations)
+        # Calculate result based on operation
+        if op == '*':
+            result = num1 * num2
+        elif op == '+':
+            result = num1 + num2
+        else:  # op == '-'
+            assert op == '-'
+            # For subtraction, ensure num1 >= num2
+            if num1 < num2:
+                num1, num2 = num2, num1
+            result = num1 - num2
+        equations.append((num1, num2, result, op))
     return equations
     
     
-def extract_solution(solution_str, *args):
-    solution = re.search("#### (\\-?[0-9\\.\\,]+)", solution_str)
-    assert solution is not None
-    final_solution = solution.group(0)
-    final_solution = final_solution.split('#### ')[1].replace(',', '')
-    return final_solution
-
 def make_prefix(dp):
     num1 = dp['num1']
     num2 = dp['num2']
-    prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> RESULT_NUMBER </answer>. User: Give me the answer of the following equation: {num1} * {num2} = Assistant: Ok let me think about it.\n<think>"""
+    op = dp['operation']
+    prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> RESULT_NUMBER </answer>. \nUser: Give me the answer of the following equation: {num1} {op} {num2}.\nAssistant: Ok let me think about it.\n<think>"""
     return prefix
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--local_dir', default='~/data/multiply-3_digit')
+    parser.add_argument('--local_dir', default='~/data/arithmetic-3_digit')
     parser.add_argument('--hdfs_dir', default=None)
 
     args = parser.parse_args()
 
-    data_source = 'yolo/multiply-3_digit'
+    data_source = 'yolo/arithmetic-3_digit'
     DIGIT = 3
     # N = 1000000
     N = 100000
@@ -125,11 +135,13 @@ if __name__ == '__main__':
             "num1": [],
             "num2": [],
             "result": [],
+            "operation": []
         }
         for dp in dataset_list:
             dataset_dict["num1"].append(dp[0])
             dataset_dict["num2"].append(dp[1])
             dataset_dict["result"].append(dp[2])
+            dataset_dict["operation"].append(dp[3])
         return Dataset.from_dict(dataset_dict)
 
     train_dataset = to_dataset(train_dataset)
