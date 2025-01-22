@@ -38,11 +38,12 @@ def gen_dataset(
     seed(1)
     # Generate N pairs of numbers and their results for different operations
     equations = []
-    operations = ['*', '+', '-', '*', '*']
+    # operations = ['*', '+', '-', '*', '*']
+    operations = ['*']
     for _ in tqdm(range(N)):
         # Helper function to generate a number with 50% chance of being N-digit or N/2-digit
         def get_random_num():
-            r = randint(0,3)
+            r = randint(1,3)
             if r == 0:
                 # 2 digits less than original
                 max_num = 10**(DIGIT-2)
@@ -79,7 +80,7 @@ def make_prefix(dp):
     num1 = dp['num1']
     num2 = dp['num2']
     op = dp['operation']
-    prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> RESULT_NUMBER </answer>. \nUser: Give me the answer of the following equation: {num1} {op} {num2}.\nAssistant: Ok let me think about it.\n<think>"""
+    prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> RESULT_NUMBER </answer>. \nUser: Give me the answer of the following equation: {num1} {op} {num2}.\nAssistant: Let me solve this step by step.\n<think>"""
     return prefix
 
 if __name__ == '__main__':
