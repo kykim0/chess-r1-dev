@@ -3,6 +3,7 @@ See [OLD_README.md](OLD_README.md)
 ## Instalation
 ```
 conda create -n zero python=3.9
+pip install -e .
 # install torch [or you can skip this step and let vllm to install the correct version for you]
 pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
 
@@ -28,7 +29,7 @@ python verl/examples/data_preprocess/arth.py
 conda activate zero
 ```
 ```
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=6
 export N_GPUS=1
 export BASE_MODEL=Qwen/Qwen2.5-0.5B
 export DATA_DIR=$HOME/data/arithmetic-3_digit
@@ -50,7 +51,7 @@ PYTHONUNBUFFERE=1 python3 -m verl.trainer.main_ppo \
  critic.optim.lr=1e-5 \
  critic.model.path=$BASE_MODEL \
  critic.ppo_micro_batch_size=8 \
- algorithm.kl_ctrl.kl_coef=0.001 \
+ algorithm.kl_ctrl.kl_coef=0.01 \
  trainer.logger=['wandb'] \
  +trainer.val_before_train=False \
  trainer.default_hdfs_dir=null \
@@ -59,6 +60,6 @@ PYTHONUNBUFFERE=1 python3 -m verl.trainer.main_ppo \
  trainer.save_freq=10 \
  trainer.test_freq=10 \
  trainer.project_name=zero \
- trainer.experiment_name=multi \
+ trainer.experiment_name=multi-hard \
  trainer.total_epochs=15 2>&1 | tee verl_demo.log
 ```
