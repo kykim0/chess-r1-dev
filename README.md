@@ -42,6 +42,7 @@ export BASE_MODEL=Qwen/Qwen2.5-1.5B
 export DATA_DIR=$HOME/data/countdown
 export WANDB_API_KEY=0929e692448f1bc929d71d7e3ece80073c3041e6
 export EXPERIMENT_NAME=countdown-qwen2.5-1.5b
+export VLLM_ATTENTION_BACKEND=XFORMERS
 
 PYTHONUNBUFFERE=1 python3 -m verl.trainer.main_ppo \
  data.train_files=$DATA_DIR/train.parquet \
@@ -84,6 +85,7 @@ export DATA_DIR=$HOME/data/countdown
 export ROLLOUT_TP_SIZE=2
 export WANDB_API_KEY=0929e692448f1bc929d71d7e3ece80073c3041e6
 export EXPERIMENT_NAME=countdown-qwen2.5-3b
+export VLLM_ATTENTION_BACKEND=XFORMERS
 
 python3 -m verl.trainer.main_ppo \
  data.train_files=$DATA_DIR/train.parquet \
@@ -126,6 +128,7 @@ export BASE_MODEL=openlm-research/open_llama_7b_v2
 export DATA_DIR=$HOME/data/countdown
 export ROLLOUT_TP_SIZE=4
 export WANDB_API_KEY=0929e692448f1bc929d71d7e3ece80073c3041e6
+export VLLM_ATTENTION_BACKEND=XFORMERS
 
 python3 -m verl.trainer.main_ppo \
  data.train_files=$DATA_DIR/train.parquet \
