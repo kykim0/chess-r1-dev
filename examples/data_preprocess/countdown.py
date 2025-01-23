@@ -4,7 +4,7 @@ Preprocess dataset for countdown task - given a target number and N numbers, gen
 
 import re
 import os
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 from random import randint, seed, choice
 from typing import List, Tuple
 from tqdm import tqdm
@@ -45,23 +45,21 @@ def gen_dataset(
         # Generate random numbers
         numbers = [randint(min_number, max_number) for _ in range(num_operands)]
         
-        # For now, we'll store a placeholder solution
-        # In real implementation, we might want to verify that a solution exists
-        solution = f"Let's try to reach {target} using {numbers}"
         
-        samples.append((target, numbers, solution))
+        samples.append((target, numbers))
     
     return samples
 
 def make_prefix(dp):
     target = dp['target']
-    numbers = dp['numbers']
+    numbers = dp['nums']
     
-    prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively.
-User: Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer> 1+2=3 </answer>.
+    prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+User: Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>.
 Assistant: Let me solve this step by step.
 <think>"""
     return prefix
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -72,7 +70,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_target', type=int, default=1000)
     parser.add_argument('--min_number', type=int, default=1)
     parser.add_argument('--max_number', type=int, default=100)
-    parser.add_argument('--train_size', type=int, default=32768)
+    parser.add_argument('--train_size', type=int, default=327680)
     parser.add_argument('--test_size', type=int, default=4096)
 
     args = parser.parse_args()
@@ -81,23 +79,19 @@ if __name__ == '__main__':
     TRAIN_SIZE = args.train_size
     TEST_SIZE = args.test_size
 
-    dataset = gen_dataset(
-        num_samples=args.num_samples,
-        num_operands=args.num_operands,
-        max_target=args.max_target,
-        min_number=args.min_number,
-        max_number=args.max_number
-    )
-    
-    dataset = list(set(dataset))
-    assert len(dataset) > TRAIN_SIZE + TEST_SIZE
-    train_dataset = dataset[:TRAIN_SIZE]
-    test_dataset = dataset[-TEST_SIZE:]
+    raw_dataset = load_dataset('Jiayi-Pan/Countdown-Tasks', split='train')
+
+    assert len(raw_dataset) > TRAIN_SIZE + TEST_SIZE
+    train_dataset = raw_dataset.select(range(TRAIN_SIZE))
+    test_dataset = raw_dataset.select(range(TRAIN_SIZE, TRAIN_SIZE + TEST_SIZE))
 
     def make_map_fn(split):
         def process_fn(example, idx):
             question = make_prefix(example)
-            solution = example['solution']
+            solution = {
+                "target": example['target'],
+                "numbers": example['nums']
+            }
             data = {
                 "data_source": data_source,
                 "prompt": [{
@@ -117,21 +111,6 @@ if __name__ == '__main__':
             return data
         return process_fn
     
-    def to_dataset(dataset_list):
-        dataset_dict = {
-            "target": [],
-            "numbers": [],
-            "solution": []
-        }
-        for dp in dataset_list:
-            dataset_dict["target"].append(dp[0])
-            dataset_dict["numbers"].append(dp[1])
-            dataset_dict["solution"].append(dp[2])
-        return Dataset.from_dict(dataset_dict)
-
-    train_dataset = to_dataset(train_dataset)
-    test_dataset = to_dataset(test_dataset)
-
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
