@@ -21,7 +21,7 @@ pip install wandb IPython matplotlib
 ## Generate Data
 ```
 conda activate zero
-python verl/examples/data_preprocess/arth.py
+python verl/examples/data_preprocess/countdown.py
 ```
 
 ## Run Training
