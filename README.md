@@ -29,10 +29,10 @@ python verl/examples/data_preprocess/countdown.py
 conda activate zero
 ```
 ```
-export CUDA_VISIBLE_DEVICES=6
+export CUDA_VISIBLE_DEVICES=7
 export N_GPUS=1
 export BASE_MODEL=Qwen/Qwen2.5-0.5B
-export DATA_DIR=$HOME/data/arithmetic-3_digit
+export DATA_DIR=$HOME/data/countdown
 PYTHONUNBUFFERE=1 python3 -m verl.trainer.main_ppo \
  data.train_files=$DATA_DIR/train.parquet \
  data.val_files=$DATA_DIR/test.parquet \
@@ -60,6 +60,6 @@ PYTHONUNBUFFERE=1 python3 -m verl.trainer.main_ppo \
  trainer.save_freq=10 \
  trainer.test_freq=10 \
  trainer.project_name=zero \
- trainer.experiment_name=multi-hard \
+ trainer.experiment_name=countdown \
  trainer.total_epochs=15 2>&1 | tee verl_demo.log
 ```
