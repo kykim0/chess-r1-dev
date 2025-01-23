@@ -50,14 +50,22 @@ def gen_dataset(
     
     return samples
 
-def make_prefix(dp):
+def make_prefix(dp, template_type):
     target = dp['target']
     numbers = dp['nums']
-    
-    prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+    if template_type == 'base':
+        """This works for any base model"""
+        prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 User: Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>.
 Assistant: Let me solve this step by step.
 <think>"""
+    elif template_type == 'qwen-chat':
+        raise NotImplementedError("Qwen-chat template WIP")
+#         """This works for Qwen Instruct Models"""
+#         prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+# User: Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>.
+# Assistant: Let me solve this step by step.
+# <think>"""
     return prefix
 
 
@@ -71,7 +79,8 @@ if __name__ == '__main__':
     parser.add_argument('--min_number', type=int, default=1)
     parser.add_argument('--max_number', type=int, default=100)
     parser.add_argument('--train_size', type=int, default=327680)
-    parser.add_argument('--test_size', type=int, default=4096)
+    parser.add_argument('--test_size', type=int, default=1024)
+    parser.add_argument('--template_type', type=str, default='base')
 
     args = parser.parse_args()
 
@@ -87,7 +96,7 @@ if __name__ == '__main__':
 
     def make_map_fn(split):
         def process_fn(example, idx):
-            question = make_prefix(example)
+            question = make_prefix(example, template_type=args.template_type)
             solution = {
                 "target": example['target'],
                 "numbers": example['nums']
