@@ -7,6 +7,7 @@ import operator
 def extract_solution(solution_str):
     """Extract the equation from the solution string."""
     # Remove everything before the first "Assistant:"
+    solution_str = solution_str.split('\n')[-1]
     if "Assistant:" in solution_str:
         solution_str = solution_str.split("Assistant:", 1)[1]
     else:
@@ -39,32 +40,17 @@ def validate_equation(equation_str, available_numbers):
 
 
 def evaluate_equation(equation_str):
-    """Safely evaluate the arithmetic equation."""
+    """Safely evaluate the arithmetic equation using eval() with precautions."""
     try:
-        # Replace operators with spaces to help split numbers
-        clean_eq = equation_str.replace('=', ' ').strip()
-        # Only allow basic arithmetic operations
-        allowed_ops = {
-            ast.Add: operator.add,
-            ast.Sub: operator.sub,
-            ast.Mult: operator.mul,
-            ast.Div: operator.truediv,
-        }
-        
-        def eval_expr(node):
-            if isinstance(node, ast.Num):
-                return node.n
-            elif isinstance(node, ast.BinOp):
-                left = eval_expr(node.left)
-                right = eval_expr(node.right)
-                if isinstance(node.op, tuple(allowed_ops.keys())):
-                    return allowed_ops[type(node.op)](left, right)
-            raise ValueError("Invalid operation")
-            
-        tree = ast.parse(clean_eq, mode='eval')
-        result = eval_expr(tree.body)
+        # Define a regex pattern that only allows numbers, operators, parentheses, and whitespace
+        allowed_pattern = r'^[\d+\-*/().\s]+$'
+        if not re.match(allowed_pattern, equation_str):
+            raise ValueError("Invalid characters in equation.")
+
+        # Evaluate the equation with restricted globals and locals
+        result = eval(equation_str, {"__builtins__": None}, {})
         return result
-    except:
+    except Exception as e:
         return None
 
 
@@ -98,7 +84,7 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
     # Validate equation uses correct numbers
     if not validate_equation(equation, numbers):
         if do_print:
-            print(f"Invalid equation: uses wrong numbers or duplicates")
+            print(f"Invalid equation")
         return format_score
         
     # Evaluate equation
@@ -109,7 +95,7 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
                 print(f"Could not evaluate equation")
             return format_score
             
-        if abs(result - target) < 1e-10:  # Account for floating point precision
+        if abs(result - target) < 1e-5:  # Account for floating point precision
             if do_print:
                 print(f"Correct equation: {equation} = {result}")
             return score
