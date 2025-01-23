@@ -119,7 +119,7 @@ python3 -m verl.trainer.main_ppo \
 ```
 
 **OpenLlama 7B model dry run**
-In this case, the base model is able to develop sophisticated reasoning skills.
+Will the model work?
 ```
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 export N_GPUS=4
