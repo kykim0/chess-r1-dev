@@ -36,12 +36,12 @@ Works for model <= 1.5B
 For Qwen2.5-0.5B base, we know it fails to learn reasoning.
 
 ```
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=3
 export N_GPUS=1
-export BASE_MODEL=Qwen/Qwen2.5-1.5B
+export BASE_MODEL=Qwen/Qwen2.5-0.5B
 export DATA_DIR=$HOME/data/countdown
 export WANDB_API_KEY=0929e692448f1bc929d71d7e3ece80073c3041e6
-export EXPERIMENT_NAME=countdown-qwen2.5-1.5b
+export EXPERIMENT_NAME=countdown-qwen2.5-0.5b
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
 PYTHONUNBUFFERE=1 python3 -m verl.trainer.main_ppo \
@@ -171,7 +171,7 @@ python examples/data_preprocess/countdown.py --template_type=qwen-instruct --loc
 Then use this data to train the instruct model.
 
 ```
-export CUDA_VISIBLE_DEVICES=4,5
+export CUDA_VISIBLE_DEVICES=0,1
 export N_GPUS=2
 export BASE_MODEL=Qwen/Qwen2.5-3B-Instruct
 export DATA_DIR=$HOME/data/countdown-qwen-instruct
