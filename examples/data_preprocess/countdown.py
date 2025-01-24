@@ -53,6 +53,7 @@ def gen_dataset(
 def make_prefix(dp, template_type):
     target = dp['target']
     numbers = dp['nums']
+    # NOTE: also need to change reward_score/countdown.py
     if template_type == 'base':
         """This works for any base model"""
         prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
