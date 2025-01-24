@@ -2,7 +2,9 @@
 This is a fork of veRL for reimplmenting [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1). You can refer to [original verl readme](OLD_README.md) for detailed information of veRL.
 
 Twitter thread: https://x.com/jiayi_pirate/status/1882839370505621655
+
 Full experiment log: https://wandb.ai/jiayipan/TinyZero
+
 ## Instalation
 ```
 conda create -n zero python=3.9
