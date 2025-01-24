@@ -8,7 +8,7 @@ pip install -r requirements.txt
 pip install -e .
 
 # quality of life
-pip IPython matplotlib
+pip install IPython matplotlib
 ```
 
 ## Countdown task
