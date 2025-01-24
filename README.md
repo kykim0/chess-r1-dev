@@ -1,6 +1,11 @@
 # TinyZero
 ![image](cover.png)
-This is a fork of veRL for reimplmenting [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1). You can refer to [original verl readme](OLD_README.md) for detailed information of veRL.
+
+TinyZero is a reproduction of [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1). We built upon [veRL](https://github.com/volcengine/verl).
+
+Through RL, the 3B base LM develops self-verification and search abilities all on its own 
+
+You can experience the Ahah moment yourself for < $30 
 
 Twitter thread: https://x.com/jiayi_pirate/status/1882839370505621655
 
