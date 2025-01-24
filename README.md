@@ -1,3 +1,4 @@
+![image](cover.png)
 This is a fork of veRL for reimplmenting [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1). You can refer to [original verl readme](OLD_README.md) for detailed information of veRL.
 
 Full experiment log: https://wandb.ai/jiayipan/TinyZero
