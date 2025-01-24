@@ -42,7 +42,7 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 bash ./scripts/train_tiny_zero.sh
 ```
 
-**3B model**
+**3B+ model**
 In this case, the base model is able to develop sophisticated reasoning skills.
 ```
 export N_GPUS=2
@@ -50,18 +50,6 @@ export BASE_MODEL={path_to_your_model}
 export DATA_DIR={path_to_your_dataset}
 export ROLLOUT_TP_SIZE=2
 export EXPERIMENT_NAME=countdown-qwen2.5-3b
-export VLLM_ATTENTION_BACKEND=XFORMERS
-
-bash ./scripts/train_tiny_zero.sh
-```
-
-**OpenLlama 7B model**
-```
-export N_GPUS=4
-export EXPERIMENT_NAME=countdown-open_llama_7b
-export BASE_MODEL={path_to_your_model}
-export DATA_DIR={path_to_your_dataset}
-export ROLLOUT_TP_SIZE=4
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
 bash ./scripts/train_tiny_zero.sh
