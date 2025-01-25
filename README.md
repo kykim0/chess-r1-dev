@@ -101,7 +101,7 @@ bash ./scripts/train_tiny_zero.sh
 @misc{tinyzero,
 author       = {Jiayi Pan and Junjie Zhang and Xingyao Wang and Lifan Yuan},
 title        = {TinyZero},
-howpublished = {[https://github.com/Jiayi-Pan/TinyZero](https://github.com/Jiayi-Pan/TinyZero)},
+howpublished = {https://github.com/Jiayi-Pan/TinyZero},
 note         = {Accessed: 2025-01-24},
 year         = {2025}
 }
