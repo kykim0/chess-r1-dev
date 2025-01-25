@@ -49,6 +49,7 @@ Works for model <= 1.5B. For Qwen2.5-0.5B base, we know it fails to learn reason
 export N_GPUS=1
 export BASE_MODEL={path_to_your_model}
 export DATA_DIR={path_to_your_dataset}
+export ROLLOUT_TP_SIZE=1
 export EXPERIMENT_NAME=countdown-qwen2.5-0.5b
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
