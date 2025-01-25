@@ -1,7 +1,7 @@
 # TinyZero
 ![image](cover.png)
 
-TinyZero is a reproduction of [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1) in countdown and multiplication tasds. We built upon [veRL](https://github.com/volcengine/verl).
+TinyZero is a reproduction of [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1) in countdown and multiplication tasks. We built upon [veRL](https://github.com/volcengine/verl).
 
 Through RL, the 3B base LM develops self-verification and search abilities all on its own 
 
@@ -11,7 +11,7 @@ Twitter thread: https://x.com/jiayi_pirate/status/1882839370505621655
 
 Full experiment log: https://wandb.ai/jiayipan/TinyZero
 
-## Instalation
+## Installation
 
 ```
 conda create -n zero python=3.9
@@ -69,7 +69,7 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 bash ./scripts/train_tiny_zero.sh
 ```
 
-### Instruct Abaltion
+### Instruct Ablation
 We experiment with QWen-2.5-3B Instruct too.
 **Data Preparation**
 To follow chat template, we need to reprocess the data:
