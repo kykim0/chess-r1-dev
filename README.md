@@ -92,3 +92,14 @@ bash ./scripts/train_tiny_zero.sh
 ## Acknowledge
 * We run our experiments based on [veRL](https://github.com/volcengine/verl).
 * We use Qwen2.5 series base model [Qwen2.5](https://github.com/QwenLM/Qwen2.5).
+
+## Citation
+```
+@misc{tinyzero,
+author       = {Jiayi Pan and Junjie Zhang and Xingyao Wang and Lifan Yuan},
+title        = {TinyZero},
+howpublished = {[https://github.com/Jiayi-Pan/TinyZero](https://github.com/Jiayi-Pan/TinyZero)},
+note         = {Accessed: 2025-01-24},
+year         = {2025}
+}
+```
