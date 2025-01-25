@@ -1,7 +1,7 @@
 # TinyZero
 ![image](cover.png)
 
-TinyZero is a reproduction of [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1). We built upon [veRL](https://github.com/volcengine/verl).
+TinyZero is a reproduction of [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1) in countdown and multiplication tasds. We built upon [veRL](https://github.com/volcengine/verl).
 
 Through RL, the 3B base LM develops self-verification and search abilities all on its own 
 
