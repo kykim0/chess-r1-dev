@@ -34,17 +34,22 @@ pip install wandb IPython matplotlib
 
 ## Countdown task
 
+**Data Preparation**
+```
+conda activate zero
+python ./examples/data_preprocess/countdown.py --local_dir {path_to_your_dataset}
+```
+
 ### Run Training
 ```
 conda activate zero
 ```
 
-**Data Preparation**
-```
-python ./examples/data_preprocess/countdown.py --local_dir {path_to_your_dataset}
-```
+For the following code, if you see Out-of-vram, try add `critic.model.enable_gradient_checkpointing=False` to the script
 
 **Single GPU**
+
+
 Works for model <= 1.5B. For Qwen2.5-0.5B base, we know it fails to learn reasoning.
 
 ```
