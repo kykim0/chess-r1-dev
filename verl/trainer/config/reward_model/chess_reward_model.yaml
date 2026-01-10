@@ -1,0 +1,104 @@
+# Format checks enforced on CI:
+# 1. Comments must appear above each field.
+# 2. There must be a blank line between each field.
+# 3. Inline comments (after a field on the same line) are not allowed.
+# 4. Indentation level is respected for nested fields.
+
+# defaults specify the default config from each component
+defaults:
+
+  # dp actor config, inheriting from trainer/config/reward_model/reward_model.yaml
+  - reward_model
+
+  # load the reference default config, then apply the fields in the current yaml
+  - _self_
+
+strategy: fsdp
+
+model:
+
+  # Whether to use shared memory for loading the model
+  use_shm: False
+
+  # Use remove padding optimization (saves compute)
+  use_remove_padding: False
+
+  # Whether to use fused reward kernels for speedup
+  use_fused_kernels: ${actor_rollout_ref.model.use_fused_kernels}
+
+  # FSDP-specific config
+  fsdp_config:
+
+    # Target configuration dataclass
+    _target_: verl.workers.config.FSDPEngineConfig
+
+    # Policy for wrapping layers with FSDP
+    wrap_policy:
+
+      # Minimum number of parameters to trigger wrapping
+      min_num_params: 0
+
+    # Whether to offload model parameters to CPU
+    param_offload: False
+
+    # Only for FSDP2: Reshard after forward pass to reduce memory footprint
+    reshard_after_forward: True
+
+    # Number of GPUs in each FSDP shard group; -1 means auto
+    fsdp_size: -1
+
+    # Only for FSDP1: FSDP1 configuration, prefetch the next forward-pass all-gather
+    # before the current forward computation.
+    forward_prefetch: False
+
+# Sequence parallelism size for Ulysses-style model parallelism
+ulysses_sequence_parallel_size: 1
+
+
+# Reward module for training.
+reward_manager: null
+
+chess_model_type: null
+
+custom_reward_function:
+  reward_kwargs:
+    format_reward: 0.1
+    english_reward: 0.1
+    # additional reward added when model correctly selects the best optimal action
+    answer_reward: 0.0
+    qvalue_reward_scaler: 1.0
+
+
+evaluation:
+
+  # Whether to enable validation-specific reward function
+  enabled: false
+
+  # Reward manager for validation (can differ from training)
+  # Options: "naive", "prime", "batch", or custom registered manager
+  reward_manager: null
+
+  # Custom reward function for validation
+  custom_reward_function:
+
+    # Path to validation reward function file
+    path: null
+
+    # Function name in the file
+    name: compute_score
+
+  # Additional kwargs for validation reward function
+  reward_kwargs: {}
+
+  # Sandbox fusion config for validation (if different from training)
+  sandbox_fusion:
+
+    # Cloud/local function URL for sandbox execution
+    url: null
+
+    # Max concurrent requests allowed to sandbox
+    max_concurrent: 64
+
+    # Max memory limit for each sandbox process in MB
+    memory_limit_mb: 1024
+  

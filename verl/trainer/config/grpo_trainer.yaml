@@ -7,6 +7,7 @@
 # specify the default per-component configs
 defaults:
   - ppo_trainer
+  - override reward_model@reward_model: chess_reward_model
   - _self_
 
 # Algorithm configuration
@@ -44,6 +45,20 @@ data:
   shuffle: true
   train_num_workers: 0
   val_num_workers: 0
+
+reward_model:
+  reward_manager: "chess_base"
+  chess_model_type: "action_value"  # [action_value, behavioral_cloning, state_value]
+  custom_reward_function:
+    reward_kwargs:
+      format_reward: 0.1
+      english_reward: 0.1
+      answer_reward: 0.0  # additional reward added when model correctly selects the best optimal action
+      qvalue_reward_scaler: 1.0
+  
+  evaluation:
+    reward_manager: "chess_lichess"
+
 
 # # Actor-Rollout-Reference configuration
 # actor_rollout_ref:
@@ -265,37 +280,3 @@ data:
 #     log_prob_use_dynamic_bsz: ${actor_rollout_ref.actor.use_dynamic_bsz}
 #     log_prob_max_token_len_per_gpu: ${actor_rollout_ref.actor.max_token_len_per_gpu}
 #     ulysses_sequence_parallel_size: ${actor_rollout_ref.actor.ulysses_sequence_parallel_size} # sp size
-
-# reward_model:
-#   train_type: Base # [Base, Lichess]
-#   val_type: Lichess # [Base, Lichess]
-#   chess_model_type: action_value # [action_value, behavioral_cloning, state_value]
-#   format_reward: 0.1
-#   english_reward: 0.1
-#   answer_reward: 0.0 # additional reward added when model correctly selects the best optimal action
-#   qvalue_reward_scaler: 1.0
-#   enable: False
-#   strategy: fsdp
-#   model:
-#     input_tokenizer: ${actor_rollout_ref.model.path}  # set this to null if the chat template is identical
-#     path: ~/models/FsfairX-LLaMA3-RM-v0.1
-#     external_lib: ${actor_rollout_ref.model.external_lib}
-#     use_remove_padding: False
-#     fsdp_config:
-#       min_num_params: 0
-#       param_offload: False
-#       fsdp_size: -1
-#   micro_batch_size_per_gpu: 4
-
-# algorithm:
-#   gamma: 1.0
-#   lam: 1.0
-#   adv_estimator: grpo
-#   kl_penalty: kl  # how to estimate kl divergence
-#   kl_coef: 0.001
-#   max_num_gen_batches: 3 # DAPO: Non-positive values mean no upper limit
-#   discard_zero_adv_samples: # DAPO
-#     enable: False 
-#   discard_maxgenlen_samples: # DAPO
-#     enable: False 
-#     max_response_length: ${data.max_response_length}

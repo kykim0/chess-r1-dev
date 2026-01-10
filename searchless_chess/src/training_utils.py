@@ -32,7 +32,7 @@ from searchless_chess.src import constants
 
 def replicate(
     array_tree: chex.ArrayTree,
-    sharding: jax.sharding.PositionalSharding,
+    sharding: jax.sharding.NamedSharding,
 ) -> chex.ArrayDeviceTree:
   """Replicates the `array_tree` across all devices specified by `sharding`.
 
@@ -191,7 +191,7 @@ def restore_checkpoint(
     params_ema: hk.Params,
     opt_state: optax.OptState,
     data_iter: pygrain.PyGrainDatasetIterator,
-    sharding: jax.sharding.PositionalSharding,
+    sharding: jax.sharding.NamedSharding,
 ) -> tuple[
     hk.Params, hk.Params, optax.OptState, pygrain.PyGrainDatasetIterator
 ]:
