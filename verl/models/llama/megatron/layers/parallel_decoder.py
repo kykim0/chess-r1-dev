@@ -18,12 +18,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
+from megatron.core import ModelParallelConfig
 from torch import nn
 from transformers import LlamaConfig
-from megatron.core import ModelParallelConfig
+
+from verl.utils.megatron_utils import TransformerConfig, convert_config
 
 from .parallel_attention import ParallelLlamaAttention, ParallelLlamaAttentionRmPad
 from .parallel_mlp import ParallelLlamaMLP
@@ -31,13 +33,12 @@ from .parallel_rmsnorm import ParallelLlamaRMSNorm
 
 
 class ParallelLlamaDecoderLayer(nn.Module):
-
-    def __init__(self, config: LlamaConfig, megatron_config: ModelParallelConfig):
+    def __init__(self, config: LlamaConfig, megatron_config: ModelParallelConfig, layer_idx: int):
         super().__init__()
+        self.config: TransformerConfig = convert_config(config, megatron_config)
+        self.layer_idx = layer_idx
         self.hidden_size = config.hidden_size
-        self.self_attn = ParallelLlamaAttention(
-            config=config, megatron_config=megatron_config
-        )
+        self.self_attn = ParallelLlamaAttention(config=config, megatron_config=megatron_config)
 
         self.mlp = ParallelLlamaMLP(config, megatron_config=megatron_config)
         self.input_layernorm = ParallelLlamaRMSNorm(config, megatron_config)
@@ -48,9 +49,7 @@ class ParallelLlamaDecoderLayer(nn.Module):
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
-    ) -> Tuple[
-        torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
-    ]:
+    ) -> tuple[torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]]:
         """
         Args:
             hidden_states (`torch.FloatTensor`): input to the layer of shape `(batch, seq_len, embed_dim)`
@@ -101,15 +100,12 @@ class ParallelLlamaDecoderLayer(nn.Module):
 
 
 class ParallelLlamaDecoderLayerRmPad(nn.Module):
-
-    def __init__(self, config: LlamaConfig, megatron_config: ModelParallelConfig):
+    def __init__(self, config: LlamaConfig, megatron_config: ModelParallelConfig, layer_idx: int):
         super().__init__()
-        self.config = config
-        self.megatron_config = megatron_config
+        self.config: TransformerConfig = convert_config(config, megatron_config)
+        self.layer_idx = layer_idx
         self.hidden_size = config.hidden_size
-        self.self_attn = ParallelLlamaAttentionRmPad(
-            config=config, megatron_config=megatron_config
-        )
+        self.self_attn = ParallelLlamaAttentionRmPad(config=config, megatron_config=megatron_config)
 
         self.mlp = ParallelLlamaMLP(config, megatron_config=megatron_config)
         self.input_layernorm = ParallelLlamaRMSNorm(config, megatron_config)
@@ -123,9 +119,7 @@ class ParallelLlamaDecoderLayerRmPad(nn.Module):
         indices: torch.Tensor = None,
         cu_seqlens: int = None,
         max_seqlen_in_batch: int = None,
-    ) -> Tuple[
-        torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
-    ]:
+    ) -> tuple[torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states  # (total_nnz // sp, 1, hidden_size)
 
         hidden_states = self.input_layernorm(hidden_states)

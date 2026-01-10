@@ -19,7 +19,6 @@ The output will contain
 3. eos_masks
 4. log_probs
 """
-from typing import Iterable, Union
 
 import torch
 import torch.nn.functional as F
@@ -28,13 +27,13 @@ from torch import nn
 
 from verl import DataProto
 from verl.utils.torch_functional import logprobs_from_logits
+
 from ..base import BaseRollout
 
 __all__ = ["NaiveRollout"]
 
 
 class NaiveRollout(BaseRollout):
-
     def __init__(self, module: nn.Module, config):
         """A naive rollout. It requires the module to be compatible with huggingface APIs. That is:
         The module should define __call__ to receive input_ids, attention_mask and position_ids.
@@ -57,19 +56,13 @@ class NaiveRollout(BaseRollout):
 
         # used to construct attention_mask
         eos_token_id = prompts.meta_info["eos_token_id"]
-        if isinstance(eos_token, int):
-            eos_token = [eos_token]
 
         batch_size = idx.size(0)
         prompt_length = idx.size(1)
 
         self.module.eval()
 
-        prev_attention_mask = torch.ones(
-            size=(batch_size, 1),
-            dtype=attention_mask.dtype,
-            device=attention_mask.device,
-        )
+        prev_attention_mask = torch.ones(size=(batch_size, 1), dtype=attention_mask.dtype, device=attention_mask.device)
 
         logits_lst = []
         for _ in range(self.config.response_length):
@@ -78,11 +71,7 @@ class NaiveRollout(BaseRollout):
             idx_cond = idx
             # forward the model to get the logits for the index in the sequence
             # we use huggingface APIs here
-            output = self.module(
-                input_ids=idx_cond,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-            )
+            output = self.module(input_ids=idx_cond, attention_mask=attention_mask, position_ids=position_ids)
             logits = output.logits
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / self.config.temperature  # (bs, vocab_size)
@@ -101,9 +90,7 @@ class NaiveRollout(BaseRollout):
             attention_mask = torch.cat((attention_mask, prev_attention_mask), dim=-1)
 
             for token_id in eos_token_id:
-                prev_attention_mask = torch.logical_and(
-                    idx_next != token_id, prev_attention_mask.bool()
-                )
+                prev_attention_mask = torch.logical_and(idx_next != token_id, prev_attention_mask.bool())
             prev_attention_mask.to(attention_mask.dtype)
 
             position_ids = torch.cat((position_ids, position_ids[:, -1:] + 1), dim=-1)

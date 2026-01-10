@@ -12,23 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from typing import Optional, Tuple, Callable
 import sys
+from typing import Callable, Optional
+
+import torch
 
 if sys.version_info >= (3, 11):
-    from typing import Unpack
+    pass
 else:
-    from typing_extensions import Unpack
+    pass
 
-from transformers.models.llama.modeling_llama import apply_rotary_pos_emb
 from transformers.cache_utils import Cache
-from transformers.utils import logging
 from transformers.modeling_flash_attention_utils import _flash_attention_forward
+from transformers.models.llama.modeling_llama import apply_rotary_pos_emb
+from transformers.utils import logging
+
+# Import compatibility wrapper for flash_attn_supports_top_left_mask
+from verl.utils.transformers_compat import flash_attn_supports_top_left_mask
 from verl.utils.ulysses import (
     gather_heads_scatter_seq,
     gather_seq_scatter_heads,
     get_ulysses_sequence_parallel_world_size,
+    validate_ulysses_config,
 )
 
 logger = logging.get_logger(__name__)
@@ -43,11 +48,9 @@ def llama_flash_attn_forward(
     output_attentions: bool = False,
     use_cache: bool = False,
     cache_position: Optional[torch.LongTensor] = None,
-    position_embeddings: Optional[
-        Tuple[torch.Tensor, torch.Tensor]
-    ] = None,  # will become mandatory in v4.46
+    position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,  # will become mandatory in v4.46
     **kwargs,
-) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[tuple[torch.Tensor]]]:
     """
     Adapted from transformers 4.47.1 to support Ulysses sequence parallelism.
 
@@ -64,15 +67,9 @@ def llama_flash_attn_forward(
     # Flash attention requires the input to have the shape
     # batch_size x seq_length x head_dim x hidden_dim
     # therefore we just need to keep the original shape
-    query_states = query_states.view(
-        bsz, q_len, self.num_heads, self.head_dim
-    ).transpose(1, 2)
-    key_states = key_states.view(
-        bsz, q_len, self.num_key_value_heads, self.head_dim
-    ).transpose(1, 2)
-    value_states = value_states.view(
-        bsz, q_len, self.num_key_value_heads, self.head_dim
-    ).transpose(1, 2)
+    query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+    key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+    value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
 
     # trade off: repeat first and then all to all
     # key_states = repeat_kv(key_states, self.num_key_value_groups)
@@ -82,6 +79,8 @@ def llama_flash_attn_forward(
     ulysses_sp_size = get_ulysses_sequence_parallel_world_size()
 
     if ulysses_sp_size > 1:
+        validate_ulysses_config(self.num_heads, ulysses_sp_size)
+
         # (bsz, n_head, seq_len/n, head_dim) -> (bsz, n_head/n, seq_len, head_dim)
         query_states = gather_seq_scatter_heads(query_states, seq_dim=2, head_dim=1)
         key_states = gather_seq_scatter_heads(key_states, seq_dim=2, head_dim=1)
@@ -104,11 +103,10 @@ def llama_flash_attn_forward(
     if past_key_value is not None:
         # sin and cos are specific to RoPE models; cache_position needed for the static cache
         cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
-        key_states, value_states = past_key_value.update(
-            key_states, value_states, self.layer_idx, cache_kwargs
-        )
+        key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
-    # TODO: These transpose are quite inefficient but Flash Attention requires the layout [batch_size, sequence_length, num_heads, head_dim]. We would need to refactor the KV cache
+    # TODO: These transpose are quite inefficient but Flash Attention requires the layout
+    # [batch_size, sequence_length, num_heads, head_dim]. We would need to refactor the KV cache
     # to be able to avoid many of these transpose/reshape/view.
     query_states = query_states.transpose(1, 2)
     key_states = key_states.transpose(1, 2)
@@ -133,9 +131,9 @@ def llama_flash_attn_forward(
             target_dtype = self.q_proj.weight.dtype
 
         logger.warning_once(
-            f"The input hidden states seems to be silently casted in float32, this might be related to"
-            f" the fact you have upcasted embedding or layer norm layers in float32. We will cast back the input in"
-            f" {target_dtype}."
+            f"The input hidden states seems to be silently casted in float32, this might be related to "
+            f"the fact you have upcasted embedding or layer norm layers in float32. We will cast back the "
+            f"input in {target_dtype}."
         )
 
         query_states = query_states.to(target_dtype)
@@ -151,7 +149,7 @@ def llama_flash_attn_forward(
         position_ids=position_ids,
         dropout=dropout_rate,
         sliding_window=getattr(self, "sliding_window", None),
-        use_top_left_mask=self._flash_attn_uses_top_left_mask,
+        use_top_left_mask=flash_attn_supports_top_left_mask(),
         is_causal=self.is_causal,
         **kwargs,
     )
@@ -172,36 +170,32 @@ def llama_flash_attn_forward(
 def llama_attn_forward(
     self,
     hidden_states: torch.Tensor,
-    position_embeddings: Tuple[torch.Tensor, torch.Tensor],
+    position_embeddings: tuple[torch.Tensor, torch.Tensor],
     attention_mask: Optional[torch.Tensor],
     past_key_value: Optional[Cache] = None,
     cache_position: Optional[torch.LongTensor] = None,
     **kwargs,
-) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[tuple[torch.Tensor]]]:
     """
     Adapted from transformers 4.49.0 to support Ulysses sequence parallelism for transformers >= 4.48.0.
 
-    NOTE: This function has been tested only on transformers versions between 4.48.0 and 4.49.0.
+    NOTE: This function has been tested only on transformers versions between 4.48.0 and 4.50.0.
     """
-    from transformers.models.llama.modeling_llama import eager_attention_forward
     from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+    from transformers.models.llama.modeling_llama import eager_attention_forward
 
     bsz, q_len, _ = hidden_states.shape
 
-    query_states = (
-        self.q_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
-    )
-    key_states = (
-        self.k_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
-    )
-    value_states = (
-        self.v_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
-    )
+    query_states = self.q_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
+    key_states = self.k_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
+    value_states = self.v_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
 
     ########## AlltoAll for Ulysses ##########
     ulysses_sp_size = get_ulysses_sequence_parallel_world_size()
 
     if ulysses_sp_size > 1:
+        validate_ulysses_config(self.config.num_attention_heads, ulysses_sp_size)
+
         query_states = gather_seq_scatter_heads(query_states, seq_dim=2, head_dim=1)
         key_states = gather_seq_scatter_heads(key_states, seq_dim=2, head_dim=1)
         value_states = gather_seq_scatter_heads(value_states, seq_dim=2, head_dim=1)
@@ -214,23 +208,18 @@ def llama_attn_forward(
     if past_key_value is not None:
         # sin and cos are specific to RoPE models; cache_position needed for the static cache
         cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
-        key_states, value_states = past_key_value.update(
-            key_states, value_states, self.layer_idx, cache_kwargs
-        )
+        key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
     attention_interface: Callable = eager_attention_forward
     if self.config._attn_implementation != "eager":
-        if self.config._attn_implementation == "sdpa" and kwargs.get(
-            "output_attentions", False
-        ):
+        if self.config._attn_implementation == "sdpa" and kwargs.get("output_attentions", False):
             logger.warning_once(
-                "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to "
-                'eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
+                "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. "
+                "Falling back to eager attention. This warning can be removed using the argument "
+                '`attn_implementation="eager"` when loading the model.'
             )
         else:
-            attention_interface = ALL_ATTENTION_FUNCTIONS[
-                self.config._attn_implementation
-            ]
+            attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
 
     attn_output, attn_weights = attention_interface(
         self,

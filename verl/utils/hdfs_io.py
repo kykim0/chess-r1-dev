@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 import shutil
-import logging
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_SFT_LOGGING_LEVEL", "WARN"))
@@ -113,13 +113,9 @@ def copy(src: str, dst: str, **kwargs) -> bool:
 def _copy(from_path: str, to_path: str, timeout: int = None) -> bool:
     if to_path.startswith("hdfs"):
         if from_path.startswith("hdfs"):
-            returncode = _run_cmd(
-                _hdfs_cmd(f"-cp -f {from_path} {to_path}"), timeout=timeout
-            )
+            returncode = _run_cmd(_hdfs_cmd(f"-cp -f {from_path} {to_path}"), timeout=timeout)
         else:
-            returncode = _run_cmd(
-                _hdfs_cmd(f"-put -f {from_path} {to_path}"), timeout=timeout
-            )
+            returncode = _run_cmd(_hdfs_cmd(f"-put -f {from_path} {to_path}"), timeout=timeout)
     else:
         if from_path.startswith("hdfs"):
             returncode = _run_cmd(

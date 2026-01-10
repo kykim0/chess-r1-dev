@@ -17,14 +17,15 @@ The results will be dump to hdfs for offline comparison.
 Each process will have a client that first move all the tensors to CPU
 """
 
-from verl.utils.hdfs_io import makedirs, copy
-import torch
-import os
-import ray
 import io
+import os
 import tempfile
-
 from collections import deque
+
+import ray
+import torch
+
+from verl.utils.hdfs_io import copy, makedirs
 
 remote_copy = ray.remote(copy)
 
@@ -48,7 +49,6 @@ def save_to_hdfs(data: io.BytesIO, name, hdfs_dir, verbose):
 
 @ray.remote
 class TrajectoryTracker:
-
     def __init__(self, hdfs_dir, verbose) -> None:
         self.hdfs_dir = hdfs_dir
         makedirs(hdfs_dir)
@@ -80,9 +80,9 @@ def get_trajectory_tracker():
     hdfs_dir = os.getenv("VERL_TRACKER_HDFS_DIR", default=None)
     verbose = os.getenv("VERL_TRACKER_VERBOSE", default="0") == "1"
     assert hdfs_dir is not None
-    tracker = TrajectoryTracker.options(
-        name="global_tracker", get_if_exists=True, lifetime="detached"
-    ).remote(hdfs_dir, verbose)
+    tracker = TrajectoryTracker.options(name="global_tracker", get_if_exists=True, lifetime="detached").remote(
+        hdfs_dir, verbose
+    )
     return tracker
 
 

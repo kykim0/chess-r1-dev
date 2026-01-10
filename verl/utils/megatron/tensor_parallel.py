@@ -15,16 +15,19 @@
 """
 Utilities for using tensor_parallel in megatron
 """
-from typing import Dict
+
+from typing import TYPE_CHECKING
+
 import torch
-from torch.nn import init
 import torch.distributed as dist
-from megatron.core import ModelParallelConfig
-from megatron.core import parallel_state as mpu, tensor_parallel
-import verl.utils.torch_functional as verl_F
+from megatron.core import parallel_state as mpu
+from torch.nn import init
+
+if TYPE_CHECKING:
+    from megatron.core import ModelParallelConfig
 
 
-def update_kwargs_with_config(dictionary: Dict, config: ModelParallelConfig):
+def update_kwargs_with_config(dictionary: dict, config: "ModelParallelConfig"):
     dictionary["config"] = config
     return dictionary
 
@@ -41,6 +44,8 @@ def get_default_kwargs_for_model_parallel_config():
 
 
 def get_default_model_parallel_config():
+    from megatron.core import ModelParallelConfig
+
     return ModelParallelConfig(**get_default_kwargs_for_model_parallel_config())
 
 
@@ -56,6 +61,8 @@ def get_common_default_kwargs_for_parallel_linear():
 
 
 def get_default_kwargs_for_column_parallel_linear():
+    from megatron.core import ModelParallelConfig
+
     model_parallel_config_kwargs = get_default_kwargs_for_model_parallel_config()
     column_parallel_config_kwargs = {
         "async_tensor_model_parallel_allreduce": False,
@@ -75,6 +82,8 @@ def get_default_kwargs_for_row_parallel_linear():
 
 
 def get_default_kwargs_for_parallel_embedding():
+    from megatron.core import ModelParallelConfig
+
     model_parallel_config_kwargs = get_default_kwargs_for_model_parallel_config()
     embedding_default_kwargs = {
         "init_method": init.xavier_normal_,
@@ -98,47 +107,36 @@ def get_tensor_parallel_partition_stride(param):
 
 
 class _VocabParallelEntropy(torch.autograd.Function):
-
     @staticmethod
     def forward(ctx, vocab_parallel_logits: torch.Tensor) -> torch.Tensor:
+        @torch.compile(dynamic=True)
+        def mul_reduce(a, b):
+            return (a * b).sum(dim=-1, keepdim=True)
+
         logits_max = vocab_parallel_logits.max(dim=-1, keepdim=True).values
-        dist.all_reduce(
-            logits_max,
-            op=dist.ReduceOp.MAX,
-            group=mpu.get_tensor_model_parallel_group(),
-        )
+        dist.all_reduce(logits_max, op=dist.ReduceOp.MAX, group=mpu.get_tensor_model_parallel_group())
         normalized_vocab_parallel_logits = vocab_parallel_logits - logits_max
-        normalized_exp_logits = normalized_vocab_parallel_logits.exp()
+        normalized_exp_logits = normalized_vocab_parallel_logits.exp_()
         normalized_sum_exp_logits = normalized_exp_logits.sum(dim=-1, keepdim=True)
-        dist.all_reduce(
-            normalized_sum_exp_logits, group=mpu.get_tensor_model_parallel_group()
-        )
-        softmax_logits = normalized_exp_logits / normalized_sum_exp_logits
-        sum_softmax_times_logits = (softmax_logits * vocab_parallel_logits).sum(
-            dim=-1, keepdim=True
-        )
-        dist.all_reduce(
-            sum_softmax_times_logits, group=mpu.get_tensor_model_parallel_group()
-        )
-        entropy = (
-            logits_max + normalized_sum_exp_logits.log() - sum_softmax_times_logits
-        )
-        ctx.save_for_backward(
-            vocab_parallel_logits, softmax_logits, sum_softmax_times_logits
-        )
+        dist.all_reduce(normalized_sum_exp_logits, group=mpu.get_tensor_model_parallel_group())
+        softmax_logits = normalized_exp_logits.div_(normalized_sum_exp_logits)
+        sum_softmax_times_logits = mul_reduce(softmax_logits, vocab_parallel_logits)
+        dist.all_reduce(sum_softmax_times_logits, group=mpu.get_tensor_model_parallel_group())
+        entropy = logits_max + normalized_sum_exp_logits.log() - sum_softmax_times_logits
+        ctx.save_for_backward(vocab_parallel_logits, softmax_logits, sum_softmax_times_logits)
         return entropy.squeeze(dim=-1)
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
-        vocab_parallel_logits, softmax_logits, sum_softmax_times_logits = (
-            ctx.saved_tensors
-        )
-        grad_input = (
-            grad_output.unsqueeze(dim=-1)
-            * softmax_logits
-            * (sum_softmax_times_logits - vocab_parallel_logits)
-        )
-        return grad_input
+        vocab_parallel_logits, softmax_logits, sum_softmax_times_logits = ctx.saved_tensors
+        # reuse softmax_logits as grad
+        vocab_parallel_logits.sub_(sum_softmax_times_logits)
+        softmax_logits.mul_(vocab_parallel_logits)
+        softmax_logits.mul_(grad_output.unsqueeze(dim=-1))
+        # recover vocab_parallel_logits
+        vocab_parallel_logits.add_(sum_softmax_times_logits)
+        softmax_logits.mul_(-1)
+        return softmax_logits
 
 
 def vocab_parallel_entropy(vocab_parallel_logits: torch.Tensor) -> torch.Tensor:
@@ -155,15 +153,14 @@ def vocab_parallel_entropy(vocab_parallel_logits: torch.Tensor) -> torch.Tensor:
 
 def vocab_parallel_log_probs_from_logits(logits, labels):
     """TODO(zhangchi.usc1992): We may change the implementation later"""
-    return -tensor_parallel.vocab_parallel_cross_entropy(
-        vocab_parallel_logits=logits, target=labels
-    )
+    from megatron.core import tensor_parallel
+
+    return -tensor_parallel.vocab_parallel_cross_entropy(vocab_parallel_logits=logits, target=labels)
 
 
-def vocab_parallel_log_probs_from_logits_response_rmpad(
-    input_ids, attention_mask, logits_rmpad, response_length
-):
-    """Similar to log_probs_from_logits_response_rmpad, but the logits_rmpad is now spliited across tensor parallel region.
+def vocab_parallel_log_probs_from_logits_response_rmpad(input_ids, attention_mask, logits_rmpad, response_length):
+    """Similar to log_probs_from_logits_response_rmpad, but the logits_rmpad is now spliited across tensor parallel
+    region.
     This will further reduce the peak memory usage during training
 
     Args:
@@ -176,40 +173,14 @@ def vocab_parallel_log_probs_from_logits_response_rmpad(
     from flash_attn.bert_padding import pad_input, unpad_input
 
     batch_size, seqlen = input_ids.shape
-    input_ids_rmpad, indices, *_ = unpad_input(
-        input_ids.unsqueeze(-1), attention_mask=attention_mask
-    )
+    input_ids_rmpad, indices, *_ = unpad_input(input_ids.unsqueeze(-1), attention_mask=attention_mask)
     input_ids_rmpad = input_ids_rmpad.squeeze(-1)
     input_ids_rmpad_rolled = torch.roll(input_ids_rmpad, shifts=-1, dims=0)
     full_log_probs_rmpad = vocab_parallel_log_probs_from_logits(
         logits=logits_rmpad, labels=input_ids_rmpad_rolled
     )  # (total_nnz,)
     full_output = pad_input(
-        hidden_states=full_log_probs_rmpad.unsqueeze(-1),
-        indices=indices,
-        batch=batch_size,
-        seqlen=seqlen,
+        hidden_states=full_log_probs_rmpad.unsqueeze(-1), indices=indices, batch=batch_size, seqlen=seqlen
     )
-    output = full_output.squeeze(-1)[
-        :, -response_length - 1 : -1
-    ]  # [batch_size, response_length]
+    output = full_output.squeeze(-1)[:, -response_length - 1 : -1]  # [batch_size, response_length]
     return output
-
-
-def vocab_parallel_compute_entropy_loss(logits, eos_mask):
-    """Compute Categorical entropy loss
-
-    Args:
-        logits: `(torch.Tensor)`
-            shape: (bs, response_length, vocab_size)
-        eos_mask: `(torch.Tensor)`
-            shape: (bs, response_length)
-
-    Returns:
-        entropy: a scalar torch.Tensor
-
-    """
-    # compute entropy
-    entropy = vocab_parallel_entropy(logits)
-    entropy_loss = verl_F.masked_mean(entropy, mask=eos_mask)
-    return entropy_loss
