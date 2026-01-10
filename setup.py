@@ -13,8 +13,10 @@
 # limitations under the License.
 
 # setup.py is the fallback installation script when pyproject.toml does not work
-from setuptools import setup, find_packages
 import os
+from pathlib import Path
+
+from setuptools import find_packages, setup
 
 version_folder = os.path.dirname(os.path.join(os.path.abspath(__file__)))
 
@@ -27,33 +29,49 @@ install_requires = [
     "datasets",
     "dill",
     "hydra-core",
-    "numpy",
+    "numpy<2.0.0",
     "pandas",
     "peft",
-    "pyarrow>=15.0.0",
+    "pyarrow>=19.0.0",
     "pybind11",
     "pylatexenc",
-    "ray>=2.10",
-    "tensordict<0.6",
+    "ray[default]>=2.41.0",
     "torchdata",
+    "tensordict>=0.8.0,<=0.10.0,!=0.9.0",
     "transformers",
-    "vllm<=0.6.3",
     "wandb",
+    "packaging>=20.0",
+    "tensorboard",
 ]
 
-TEST_REQUIRES = ["pytest", "yapf", "py-spy"]
+TEST_REQUIRES = ["pytest", "pre-commit", "py-spy", "pytest-asyncio"]
 PRIME_REQUIRES = ["pyext"]
-GEO_REQUIRES = ["mathruler"]
+GEO_REQUIRES = ["mathruler", "torchvision", "qwen_vl_utils"]
 GPU_REQUIRES = ["liger-kernel", "flash-attn"]
+MATH_REQUIRES = ["math-verify"]  # Add math-verify as an optional dependency
+VLLM_REQUIRES = ["tensordict>=0.8.0,<=0.10.0,!=0.9.0", "vllm>=0.8.5,<=0.11.0"]
+SGLANG_REQUIRES = [
+    "tensordict>=0.8.0,<=0.10.0,!=0.9.0",
+    "sglang[srt,openai]==0.5.5",
+    "torch==2.8.0",
+]
+TRL_REQUIRES = ["trl<=0.9.6"]
+MCORE_REQUIRES = ["mbridge"]
+TRANSFERQUEUE_REQUIRES = ["TransferQueue @ git+https://github.com/TransferQueue/TransferQueue.git@68c04e7"]
 
 extras_require = {
     "test": TEST_REQUIRES,
     "prime": PRIME_REQUIRES,
     "geo": GEO_REQUIRES,
     "gpu": GPU_REQUIRES,
+    "math": MATH_REQUIRES,
+    "vllm": VLLM_REQUIRES,
+    "sglang": SGLANG_REQUIRES,
+    "trl": TRL_REQUIRES,
+    "mcore": MCORE_REQUIRES,
+    "transferqueue": TRANSFERQUEUE_REQUIRES,
 }
 
-from pathlib import Path
 
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()

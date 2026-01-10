@@ -29,5 +29,5 @@ python data_preprocess/chess_sft.py --data_type chess_mechanics
 python data_preprocess/deepmind_lichess_quiz.py
 python data_preprocess/lichess_quiz.py
 
-rm -rf temp
+# rm -rf temp
 

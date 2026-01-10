@@ -13,13 +13,11 @@
 # limitations under the License.
 # Adapted from https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/layers/linear.py
 
-from typing import Optional, Tuple
-
+import torch
 from megatron.core import tensor_parallel
 
 
 class QKVParallelLinear(tensor_parallel.ColumnParallelLinear):
-
     def __init__(
         self,
         input_size,
@@ -54,7 +52,6 @@ class QKVParallelLinear(tensor_parallel.ColumnParallelLinear):
 
 
 class MergedColumnParallelLinear(tensor_parallel.ColumnParallelLinear):
-
     def __init__(
         self,
         input_size,
@@ -80,3 +77,30 @@ class MergedColumnParallelLinear(tensor_parallel.ColumnParallelLinear):
             skip_bias_add=skip_bias_add,
             **kwargs,
         )
+
+
+class LinearForLastLayer(torch.nn.Linear):
+    def __init__(
+        self,
+        input_size,
+        output_size,
+        *,
+        config,
+        bias=True,
+    ):
+        super().__init__(in_features=input_size, out_features=output_size, bias=bias)
+        self.sequence_parallel = config.sequence_parallel
+        if self.sequence_parallel:
+            self.weight.sequence_parallel = True
+
+    def forward(
+        self,
+        input_,
+        weight=None,
+        runtime_gather_output=None,
+    ):
+        logits = super().forward(input_)
+        logits = logits.float()
+        if self.sequence_parallel:
+            logits = tensor_parallel.gather_from_sequence_parallel_region(logits, tensor_parallel_output_grad=False)
+        return logits, None

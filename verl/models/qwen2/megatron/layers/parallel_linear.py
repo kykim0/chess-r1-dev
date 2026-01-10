@@ -13,13 +13,11 @@
 # limitations under the License.
 # Adapted from https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/layers/linear.py
 
-from typing import Optional, Tuple
 
 from megatron.core import tensor_parallel
 
 
 class QKVParallelLinear(tensor_parallel.ColumnParallelLinear):
-
     def __init__(
         self,
         input_size,
@@ -54,7 +52,6 @@ class QKVParallelLinear(tensor_parallel.ColumnParallelLinear):
 
 
 class MergedColumnParallelLinear(tensor_parallel.ColumnParallelLinear):
-
     def __init__(
         self,
         input_size,

@@ -11,13 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import re
 
 from mathruler.grader import extract_boxed_content, grade_answer
 
 
-def compute_score(predict_str: str, ground_truth: str) -> float:
-    answer = extract_boxed_content(predict_str)
-    if grade_answer(answer, ground_truth):
-        return 1.0  # correct answer
+def format_reward(predict_str: str) -> float:
+    pattern = re.compile(r"<think>.*</think>.*\\boxed\{.*\}.*", re.DOTALL)
+    match_result = re.fullmatch(pattern, predict_str)
+    return 1.0 if match_result else 0.0
 
-    return 0.0  # wrong answer
+
+def acc_reward(predict_str: str, ground_truth: str, use_boxed: bool = True) -> float:
+    if use_boxed:
+        answer = extract_boxed_content(predict_str)
+    else:
+        answer = predict_str
+    return 1.0 if grade_answer(answer, ground_truth) else 0.0
+
+
+def compute_score(predict_str: str, ground_truth: str, use_boxed: bool = True, format_score: float = 0.1) -> float:
+    return (1.0 - format_score) * acc_reward(predict_str, ground_truth, use_boxed) + format_score * format_reward(
+        predict_str
+    )

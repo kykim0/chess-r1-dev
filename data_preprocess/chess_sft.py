@@ -1,14 +1,12 @@
-""" Preprocess dataset for chess task """
+"""Preprocess dataset for chess task"""
 
-import os
 import argparse
 import json
+import os
 import re
-import ipdb
 
 from datasets import Dataset
-from tqdm import tqdm
-from verl.utils.hdfs_io import copy, makedirs
+
 
 def jsonl_to_list(jsonl_file_path):
     """
