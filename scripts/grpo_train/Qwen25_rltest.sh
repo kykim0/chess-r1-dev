@@ -117,6 +117,7 @@ reference_args=" \
 
 algorithm_args=" \
     algorithm.gamma=1.0 \
+    algorithm.filter_groups.enable=true \
     algorithm.filter_groups.max_num_gen_batches=10 \
 "
 
@@ -128,8 +129,8 @@ algorithm_args=" \
 # "
 
 reward_args=" \
-    reward_model.train_type=Base \
-    reward_model.val_type=Lichess \
+    reward_model.reward_manager=chess_base \
+    reward_model.evaluation.reward_manager=chess_lichess \
 "
 
 TRAIN_ARGS="$trainer_args $data_args $actor_args $rollout_args $reference_args $algorithm_args $reward_args"
@@ -141,4 +142,4 @@ ray stop --force && ray start --head --include-dashboard=True
 # Create log directory if it doesn't exist
 mkdir -p ${LOG_DIR}
 
-python -m verl.trainer.main_ppo $TRAIN_ARGS 2>&1 | tee ${LOG_DIR}/verl_demo.log
+python -m verl.trainer.main_ppo --config-name grpo_trainer $TRAIN_ARGS 2>&1 | tee ${LOG_DIR}/verl_demo.log
