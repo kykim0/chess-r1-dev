@@ -24,9 +24,9 @@ fasttext.FastText.eprint = lambda *args, **kwargs: None
 from jax import random as jrandom
 import numpy as np
 import spacy
-from spacy_langdetect import LanguageDetector
 from spacy.language import Language
-Language.factory("language_detector", func=lambda nlp, name: LanguageDetector())
+from spacy_langdetect import LanguageDetector
+from spacy.tokens import Doc
 import torch
 
 from searchless_chess.src import tokenizer
@@ -39,6 +39,18 @@ from verl.utils.reward_score import gsm8k, countdown, think_chess, answer_chess,
                                     chess_best_move, chess_comparison, chess_mechanics, deepmind_lichess
 from verl.workers.reward_manager import register
 from verl.workers.reward_manager.abstract import AbstractRewardManager
+
+def get_lang_detector(nlp, name):
+    # Manually register the extensions that LanguageDetector needs
+    if not Doc.has_extension("language"):
+        Doc.set_extension("language", default=None)
+    if not Doc.has_extension("language_score"):
+        Doc.set_extension("language_score", default=None)
+
+    return LanguageDetector()
+
+if not Language.has_factory("language_detector"):
+    Language.factory("language_detector", func=get_lang_detector)
 
 
 def _select_rm_score_fn(data_source):
@@ -97,6 +109,7 @@ class ChessRewardManager(AbstractRewardManager):
         self.lg_detector = spacy.load("en_core_web_lg")
         for pipe_name in self.lg_detector.pipe_names: # Remove all existing pipes
             self.lg_detector.remove_pipe(pipe_name)
+        self.lg_detector.add_pipe("sentencizer")
         self.lg_detector.add_pipe("language_detector")
 
         self.chess_model, self.return_buckets_values = self._setup_chess_model()
@@ -218,7 +231,7 @@ class ChessRewardManager(AbstractRewardManager):
             compute_score_fn = _select_rm_score_fn(data_source)
 
             score, correct_seq, reward_logs = compute_score_fn(
-                solution_str=sequences_str, 
+                solution_str=sequences_str,
                 ground_truth_dict=ground_truth_dict, 
                 lg_detector=self.lg_detector,
                 chess_model_qvalues=precomputed_chess_qvalues,
@@ -323,10 +336,10 @@ class LichessRewardManager(AbstractRewardManager):
             compute_score_fn = _select_rm_score_fn(data_source)
             
             correct_seq, reward_logs = compute_score_fn(
-                    solution_str=sequences_str, 
-                    ground_truth_dict=ground_truth_dict,
-                    answer_reward=1.0,
-                )
+                solution_str=sequences_str,
+                ground_truth_dict=ground_truth_dict,
+                answer_reward=1.0,
+            )
             
             correct_seq_tensor[i] = correct_seq
             per_id_flags[pid].append(bool(correct_seq))
@@ -443,10 +456,10 @@ class ChessSFTRewardManager(AbstractRewardManager):
             compute_score_fn = _select_rm_score_fn(data_source)
             
             correct_seq, reward_logs = compute_score_fn(
-                    solution_str=sequences_str, 
-                    ground_truth_dict=ground_truth_dict,
-                    answer_reward=1.0,
-                )
+                solution_str=sequences_str,
+                ground_truth_dict=ground_truth_dict,
+                answer_reward=1.0,
+            )
             
             correct_seq_tensor[i] = correct_seq
 
