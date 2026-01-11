@@ -10,8 +10,6 @@
 #SBATCH --nodelist=
 #SBATCH --exclude=node4
 
-source /home/ubuntu/sentient-research-shared/kykim/miniconda3/bin/activate cr1
-
 export HYDRA_FULL_ERROR=1
 # export NCCL_DEBUG=INFO
 # export NCCL_DEBUG_SUBSYS=ALL
@@ -19,25 +17,24 @@ export HYDRA_FULL_ERROR=1
 # export NCCL_P2P_DISABLE=1
 # export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-
 # Environment variables
-export N_GPUS=2 # number of gpus
+export N_GPUS=1 # number of gpus
 unset ROCR_VISIBLE_DEVICES
 unset HIP_VISIBLE_DEVICES
-export CUDA_VISIBLE_DEVICES=0,1,2,3 # fix this so that it matches N_GPU
+export CUDA_VISIBLE_DEVICES=$(seq -s, 0 $((N_GPUS-1)))
+export RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0
 export ROLLOUT_TP_SIZE=1  # Set tensor parallel
-export VLLM_ATTENTION_BACKEND=XFORMERS  # Use XFORMERS for attention
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 # Define model and dataset
 export DATA_DIR=${DATA_DIR:-"data/lichess_db_puzzle_processed_qwen_instruct_reastemp_fen_legal_rule"}
 # export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen2.5-7B"}
-export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen2.5-3B"}
+export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen2.5-0.5B"}
 
 # Experiment metadata
 # export USER_NAME=${USER_NAME:-"USER"}
 # export GROUP_NAME=${GROUP_NAME:-"Qwen25_7B_Base"}
-export PROJECT_NAME=${PROJECT_NAME:-"Qwen25_3B_Base"}
+export PROJECT_NAME=${PROJECT_NAME:-"Qwen25_0.5B_Base"}
 # export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Nochessdata_yesreastemp_fen_legal_rule_yesRLfeedback"}
 export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"rl_test"}
 
@@ -59,7 +56,6 @@ trainer_args=" \
     trainer.total_training_steps=150 \
     trainer.resume_from_path=False \
     trainer.default_local_dir=$CHECKPOINT_DIR \
-    trainer.default_hdfs_dir=$CHECKPOINT_DIR \
 "
 
 # batch_size: data.train_batch_size * actor.num_response
@@ -70,16 +66,17 @@ trainer_args=" \
 data_args=" \
     data.train_files=$DATA_DIR/train.parquet \
     data.val_files=$DATA_DIR/evaluate.parquet \
-    data.train_batch_size=128 \
+    data.train_batch_size=4 \
     data.max_prompt_length=1024 \
     data.max_response_length=2048 \
+    data.dataloader_num_workers=0 \
 "
 
 actor_args=" \
     actor_rollout_ref.model.path=$BASE_MODEL \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_epochs=1 \
-    actor_rollout_ref.actor.ppo_mini_batch_size=128 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=4 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
@@ -87,20 +84,6 @@ actor_args=" \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
 "
-
-# actor_args=" \
-#     actor_rollout_ref.model.path=$BASE_MODEL \
-#     actor_rollout_ref.actor.optim.lr=1e-6 \
-#     actor_rollout_ref.actor.epochs=1 \
-#     actor_rollout_ref.actor.mini_batch_size=128 \
-#     actor_rollout_ref.actor.micro_batch_size_per_gpu=2 \
-#     actor_rollout_ref.actor.use_kl_loss=True \
-#     actor_rollout_ref.actor.kl_loss_coef=0.001 \
-#     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
-#     actor_rollout_ref.actor.fsdp_config.param_offload=False \
-#     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-#     actor_rollout_ref.actor.use_token_level_loss=False \
-# "
 
 rollout_args=" \
     actor_rollout_ref.rollout.name=vllm \
@@ -120,13 +103,6 @@ algorithm_args=" \
     algorithm.filter_groups.enable=true \
     algorithm.filter_groups.max_num_gen_batches=10 \
 "
-
-# algorithm_args=" \
-#     algorithm.gamma=1.0 \
-#     algorithm.discard_zero_adv_samples.enable=False \
-#     algorithm.max_num_gen_batches=10 \
-#     algorithm.discard_maxgenlen_samples.enable=True \
-# "
 
 reward_args=" \
     reward_model.reward_manager=chess_base \
