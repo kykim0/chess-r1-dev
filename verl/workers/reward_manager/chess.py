@@ -24,6 +24,9 @@ fasttext.FastText.eprint = lambda *args, **kwargs: None
 from jax import random as jrandom
 import numpy as np
 import spacy
+from spacy_langdetect import LanguageDetector
+from spacy.language import Language
+Language.factory("language_detector", func=lambda nlp, name: LanguageDetector())
 import torch
 
 from searchless_chess.src import tokenizer
