@@ -20,7 +20,7 @@ export HYDRA_FULL_ERROR=1
 # export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Environment variables
-export N_GPUS=1 # number of gpus
+export N_GPUS=2 # number of gpus
 unset ROCR_VISIBLE_DEVICES
 unset HIP_VISIBLE_DEVICES
 export CUDA_VISIBLE_DEVICES=$(seq -s, 0 $((N_GPUS-1)))
@@ -30,13 +30,13 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 # Define model and dataset
 export DATA_DIR=${DATA_DIR:-"data/qwen3"}
-export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-0.6B"}
+export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-4B"}
 
 # Experiment metadata
 # export USER_NAME=${USER_NAME:-"USER"}
-export PROJECT_NAME=${PROJECT_NAME:-"chess-r1-test"}
+export PROJECT_NAME=${PROJECT_NAME:-"chess-r1"}
 # export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Nochessdata_yesreastemp_fen_legal_rule_yesRLfeedback"}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Qwen3-0.6B"}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Qwen3-4B"}
 
 timestamp=$(date +"%m%d-%H%M")
 DATA_NAME=$(basename "$DATA_DIR")       
@@ -75,45 +75,41 @@ trainer_args=" \
 data_args=" \
     data.train_files=$DATA_DIR/train.parquet \
     data.val_files=$DATA_DIR/valid.parquet \
-    data.train_batch_size=8 \
-    data.val_max_samples=36 \
+    data.train_batch_size=128 \
+    data.val_max_samples=1024 \
     data.max_prompt_length=1024 \
-    data.max_response_length=2048 \
+    data.max_response_length=8192 \
     data.dataloader_num_workers=0 \
+    data.return_full_prompt=true \
 "
 
 actor_args=" \
     actor_rollout_ref.model.path=$BASE_MODEL \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_epochs=1 \
-    actor_rollout_ref.actor.ppo_mini_batch_size=8 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=128 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=false \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
 "
-
-# actor_rollout_ref.actor.ppo_max_token_len_per_gpu=4096
 
 rollout_args=" \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
-    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=8 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=$ROLLOUT_TP_SIZE \
     actor_rollout_ref.rollout.n=8 \
+    actor_rollout_ref.rollout.max_num_batched_tokens=16384 \
+    actor_rollout_ref.rollout.max_model_len=16384 \
 "
-
-# actor_rollout_ref.rollout.max_num_batched_tokens=4096 \
-# actor_rollout_ref.rollout.max_model_len=4096 \
 
 reference_args=" \
-    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
+    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=8 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
 "
-
-# actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=4096
 
 algorithm_args=" \
     algorithm.gamma=1.0 \
@@ -135,4 +131,4 @@ ray stop --force && ray start --head --include-dashboard=True
 # Create log directory if it doesn't exist
 mkdir -p ${LOG_DIR}
 
-python -m verl.trainer.main_ppo --config-name grpo_trainer $TRAIN_ARGS 2>&1 | tee ${LOG_DIR}/main_ppo.log
+python -m verl.trainer.main_ppo --config-name grpo_trainer $TRAIN_ARGS 2>&1 | tee ${LOG_DIR}/verl_demo.log

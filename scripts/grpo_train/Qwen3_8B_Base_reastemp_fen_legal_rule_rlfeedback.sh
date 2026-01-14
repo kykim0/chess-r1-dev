@@ -19,8 +19,8 @@ export HYDRA_FULL_ERROR=1
 # export NCCL_P2P_DISABLE=1
 # export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Environment variables
-export N_GPUS=1 # number of gpus
+# Environment variables.
+export N_GPUS=4
 unset ROCR_VISIBLE_DEVICES
 unset HIP_VISIBLE_DEVICES
 export CUDA_VISIBLE_DEVICES=$(seq -s, 0 $((N_GPUS-1)))
@@ -30,13 +30,13 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 # Define model and dataset
 export DATA_DIR=${DATA_DIR:-"data/qwen3"}
-export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-0.6B"}
+export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-8B"}
 
 # Experiment metadata
 # export USER_NAME=${USER_NAME:-"USER"}
-export PROJECT_NAME=${PROJECT_NAME:-"chess-r1-test"}
+export PROJECT_NAME=${PROJECT_NAME:-"chess-r1"}
 # export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Nochessdata_yesreastemp_fen_legal_rule_yesRLfeedback"}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Qwen3-0.6B"}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Qwen3-8B"}
 
 timestamp=$(date +"%m%d-%H%M")
 DATA_NAME=$(basename "$DATA_DIR")       
@@ -53,18 +53,18 @@ hydra_args="
 trainer_args=" \
     trainer.project_name=$PROJECT_NAME \
     trainer.experiment_name=$EXPERIMENT_NAME \
-    trainer.logger=[wandb] \
+    trainer.logger=['wandb'] \
     trainer.n_gpus_per_node=$N_GPUS \
     trainer.nnodes=1 \
-    trainer.save_freq=2 \
-    trainer.test_freq=2 \
-    trainer.total_training_steps=4 \
+    trainer.save_freq=10 \
+    trainer.test_freq=15 \
+    trainer.total_training_steps=150 \
     trainer.resume_from_path=False \
     trainer.default_local_dir=$CHECKPOINT_DIR \
     trainer.val_before_train=true \
     trainer.max_actor_ckpt_to_keep=1 \
     trainer.rollout_data_dir=$LOG_DIR/rollouts \
-    trainer.log_val_generations=12 \
+    trainer.log_val_generations=1024 \
 "
 
 # batch_size: data.train_batch_size * actor.num_response
@@ -75,10 +75,10 @@ trainer_args=" \
 data_args=" \
     data.train_files=$DATA_DIR/train.parquet \
     data.val_files=$DATA_DIR/valid.parquet \
-    data.train_batch_size=8 \
-    data.val_max_samples=36 \
+    data.train_batch_size=128 \
+    data.val_max_samples=1024 \
     data.max_prompt_length=1024 \
-    data.max_response_length=2048 \
+    data.max_response_length=4096 \
     data.dataloader_num_workers=0 \
 "
 
@@ -86,16 +86,14 @@ actor_args=" \
     actor_rollout_ref.model.path=$BASE_MODEL \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_epochs=1 \
-    actor_rollout_ref.actor.ppo_mini_batch_size=8 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=128 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=false \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
 "
-
-# actor_rollout_ref.actor.ppo_max_token_len_per_gpu=4096
 
 rollout_args=" \
     actor_rollout_ref.rollout.name=vllm \
@@ -105,19 +103,14 @@ rollout_args=" \
     actor_rollout_ref.rollout.n=8 \
 "
 
-# actor_rollout_ref.rollout.max_num_batched_tokens=4096 \
-# actor_rollout_ref.rollout.max_model_len=4096 \
-
 reference_args=" \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
 "
 
-# actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=4096
-
 algorithm_args=" \
     algorithm.gamma=1.0 \
-    algorithm.filter_groups.enable=true \
+    algorithm.filter_groups.enable=false \
     algorithm.filter_groups.max_num_gen_batches=10 \
 "
 

@@ -24,6 +24,29 @@ from pathlib import Path
 from typing import Any
 
 
+def _tensor_to_py(obj):
+    """Convert tensor/numpy to Python native types for JSON serialization"""
+    import torch
+    import numpy as np
+
+    if isinstance(obj, torch.Tensor):
+        obj = obj.cpu().numpy()
+
+    if isinstance(obj, np.ndarray):
+        if obj.ndim == 0:  # scalar
+            return obj.item()
+        else:  # array
+            return obj.tolist()
+
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+
+    if isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+
+    return obj
+
+
 class Tracking:
     """A unified tracking interface for logging experiment data to multiple backends.
 
@@ -239,6 +262,7 @@ class FileLogger:
         self.fp = open(self.filepath, "w")
 
     def log(self, data, step):
+        data = _tensor_to_py(data)
         data = {"step": step, "data": data}
         self.fp.write(json.dumps(data) + "\n")
 
@@ -334,6 +358,7 @@ def _flatten_dict(raw: dict[str, Any], *, sep: str) -> dict[str, Any]:
 
 @dataclasses.dataclass
 class ValidationGenerationsLogger:
+    local_dir: str = None
     project_name: str = None
     experiment_name: str = None
 
@@ -344,14 +369,13 @@ class ValidationGenerationsLogger:
             self.log_generations_to_swanlab(samples, step)
         if "mlflow" in loggers:
             self.log_generations_to_mlflow(samples, step)
-
         if "clearml" in loggers:
             self.log_generations_to_clearml(samples, step)
         if "tensorboard" in loggers:
             self.log_generations_to_tensorboard(samples, step)
-
         if "vemlp_wandb" in loggers:
             self.log_generations_to_vemlp_wandb(samples, step)
+        self.log_generations_to_file(samples, step)
 
     def log_generations_to_vemlp_wandb(self, samples, step):
         from volcengine_ml_platform import wandb as vemlp_wandb
@@ -495,3 +519,27 @@ class ValidationGenerationsLogger:
         self.writer.add_text("val/generations", text_content, step)
         # Flush to ensure data is written
         self.writer.flush()
+
+    def log_generations_to_file(self, samples, step):
+        """Log samples to logdir."""
+        # Determine output directory.
+        output_dir = os.path.join(self.local_dir, "valid_samples")
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Format the data similar to wandb table structure.
+        row_data = {
+            "step": step,
+            "samples": [],
+        }
+        for i, sample in enumerate(samples):
+            sample_data = {
+                f"input_{i + 1}": sample[0],
+                f"output_{i + 1}": sample[1],
+                f"score_{i + 1}": sample[2]
+            }
+            row_data["samples"].append(sample_data)
+
+        # Save a pretty-printed version for the latest step.
+        latest_file = os.path.join(output_dir, f"step_{step:05d}.json")
+        with open(latest_file, "w") as f:
+            json.dump(row_data, f, indent=2)

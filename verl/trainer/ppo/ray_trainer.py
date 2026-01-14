@@ -326,6 +326,7 @@ class RayPPOTrainer:
         self.ray_worker_group_cls = ray_worker_group_cls
         self.device_name = device_name if device_name else self.config.trainer.device
         self.validation_generations_logger = ValidationGenerationsLogger(
+            local_dir=self.config.trainer.default_local_dir,
             project_name=self.config.trainer.project_name,
             experiment_name=self.config.trainer.experiment_name,
         )
