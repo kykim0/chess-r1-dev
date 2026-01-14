@@ -1,16 +1,14 @@
 import re
-import random
 import chess
-import time
 import torch
 import numpy as np
 
-from typing import Dict, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 from searchless_chess.src.engines import engine
 
 
 def extract_solution(solution_str: str, logs: dict) -> Tuple[Optional[str], str, dict]:
-    """Extract the final answer from the model's response string by isolating the assistant's output.
+    """Extract the final answer from the model"s response string by isolating the assistant's output.
     
     Args:
         solution_str: Raw response string from the language model
@@ -40,9 +38,11 @@ def extract_solution(solution_str: str, logs: dict) -> Tuple[Optional[str], str,
     if not matches:
         return None, processed_str, logs
     else:
-        logs['format'] = 1
+        logs["format"] = 1
         final_answer = matches[-1].group(1).strip()
+        logs["answer_text"] = final_answer
         return final_answer, processed_str, logs
+
 
 def validate_response_structure(processed_str: str, logs: dict) -> Tuple[bool, dict]:
     """Performs comprehensive validation of response structure.
@@ -84,6 +84,7 @@ def validate_response_structure(processed_str: str, logs: dict) -> Tuple[bool, d
     
     return validation_passed, logs
 
+
 def _update_optimal_logs(num_legal_moves: int, logs: dict) -> None:
     """
     Updates logs with counters based on the number of legal moves.
@@ -102,11 +103,12 @@ def _update_optimal_logs(num_legal_moves: int, logs: dict) -> None:
 
     return logs
 
+
 def validate_chess_move_qvalue(
     fen: str,
     move: str,
     chess_model_qvalues: np.array,
-    legal_moves: Tuple[str],
+    legal_moves: List[str],
     logs: dict,
 ) -> Tuple[float, dict]:
     """
@@ -136,14 +138,14 @@ def validate_chess_move_qvalue(
     if move not in legal_moves:
         return use_answer_reward, 0.0, logs
     else:
-        logs['legal_move'] = 1
+        logs["legal_move"] = 1
 
     # Obtain legal moves in the order used by the engine.
     legal_moves_ordered = [m.uci() for m in engine.get_ordered_legal_moves(board)]
     selected_index = legal_moves_ordered.index(move_uci)
     move_qvalue = chess_model_qvalues[selected_index] # qvalue of my selected move
-    logs['q_value'] = move_qvalue
-    
+    logs["q_value"] = move_qvalue
+
     sorted_win_indices = np.argsort(chess_model_qvalues)[::-1]
     optimal_move = legal_moves_ordered[sorted_win_indices[0]] # optimal move for current board
     if move_uci == optimal_move:
@@ -152,20 +154,21 @@ def validate_chess_move_qvalue(
 
     # compute regret
     optimal_move_qvalue = chess_model_qvalues[sorted_win_indices[0]] # qvalue of optimal move for current board
-    logs['optimal_q_value_gap'] = move_qvalue - optimal_move_qvalue
+    logs["optimal_q_value_gap"] = move_qvalue - optimal_move_qvalue
 
     # the rank of our selected move
     move_rank = int(np.where(sorted_win_indices == selected_index)[0][0]) + 1 
     # Normalizes the rank into a score between 0 and 1, where 1 means we've done well, and 0 means we've done really bad
-    logs['normalized_rank'] = (chess_model_qvalues.shape[0] - move_rank)/chess_model_qvalues.shape[0]
+    logs["normalized_rank"] = (chess_model_qvalues.shape[0] - move_rank)/chess_model_qvalues.shape[0]
     
     return use_answer_reward, move_qvalue, logs
+
 
 def validate_chess_move_strict(
     fen: str,
     move: str,
     answer_move: str,
-    legal_moves: Tuple[str],
+    legal_moves: List[str],
     logs: dict,
 ) -> Tuple[float, dict]:
     """
@@ -196,17 +199,18 @@ def validate_chess_move_strict(
     if move not in legal_moves:
         return use_answer_reward, 0.0, logs
     else:
-        logs['legal_move'] = 1
+        logs["legal_move"] = 1
 
     correct = move == answer_move
     if correct:
         use_answer_reward = True
-        logs['optimal'] = 1.0
+        logs["optimal"] = 1.0
     else:
         use_answer_reward = False
-        logs['optimal'] = 0.0
+        logs["optimal"] = 0.0
 
     return use_answer_reward, move_qvalue, logs
+
 
 def validate_english_text(text: str, lg_detector: torch.nn.Module, logs: dict, threshold: float = 0.9) -> Tuple[float, dict]:
     """
@@ -228,8 +232,8 @@ def validate_english_text(text: str, lg_detector: torch.nn.Module, logs: dict, t
         doc = lg_detector(text)
         
     # The language detector returns a dictionary with keys 'language' and 'score'
-    detected_lang = doc._.language
-    score = doc._.language_score
+    detected_lang = doc._.language["language"]
+    score = doc._.language["score"]
 
     if detected_lang == "en" and score >= threshold:
         use_english_reward = True
@@ -238,6 +242,7 @@ def validate_english_text(text: str, lg_detector: torch.nn.Module, logs: dict, t
     logs['english'] = use_english_reward
 
     return use_english_reward, logs
+
 
 def compute_score(
     solution_str: str,
@@ -254,14 +259,21 @@ def compute_score(
     """
 
     # Parse ground truth data
-    board_fen = ground_truth_dict['board_fen']
-    next_move_san = ground_truth_dict['next_move_san']
-    legal_moves_san = ground_truth_dict['legal_moves_san']
+    board_fen = ground_truth_dict["board_fen"]
+    next_move_san = ground_truth_dict["next_move_san"]
+    legal_moves_san = ground_truth_dict["legal_moves_san"]
+    if isinstance(legal_moves_san, str):
+        legal_moves_san = legal_moves_san.split()
 
-    # Initialize log metrics
-    logs = {'format': 0, 'legal_move': 0, 'english': 0, 
-            'optimal': 0, 'optimal/1_10_moves': 0, 'optimal/11_20_moves': 0, 
-            'optimal/21_30_moves': 0, 'optimal/31_40_moves': 0, 'optimal/over40_moves': 0}
+    # Initialize log metrics. This ensures that all values are always present
+    # so to appease the shape consistency check (in protocol.py).
+    logs = {
+        "answer_text": "",
+        "format": 0, "legal_move": 0, "english": 0,
+        "q_value": 0, "optimal_q_value_gap": 0, "normalized_rank": 0,
+        "optimal": 0, "optimal/1_10_moves": 0, "optimal/11_20_moves": 0,
+        "optimal/21_30_moves": 0, "optimal/31_40_moves": 0, "optimal/over40_moves": 0,
+    }
 
     # Extract model answer (pass logs to the function)
     answer_text, processed_str, logs = extract_solution(solution_str, logs)
@@ -280,6 +292,8 @@ def compute_score(
             threshold=0.9,
         )
 
+    use_answer_reward = False
+    qvalue_reward = 0.0
     try:
         if format_correct and answer_text:
             if qvalue_reward_scaler != 0.0:

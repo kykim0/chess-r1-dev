@@ -60,13 +60,11 @@ reward_manager: null
 
 chess_model_type: null
 
-custom_reward_function:
-  reward_kwargs:
-    format_reward: 0.1
-    english_reward: 0.1
-    # additional reward added when model correctly selects the best optimal action
-    answer_reward: 0.0
-    qvalue_reward_scaler: 1.0
+reward_kwargs:
+  format_reward: 0.1
+  english_reward: 0.1
+  answer_reward: 0.0  # additional reward added when model correctly selects the best optimal action
+  qvalue_reward_scaler: 1.0
 
 
 evaluation:
@@ -78,27 +76,5 @@ evaluation:
   # Options: "naive", "prime", "batch", or custom registered manager
   reward_manager: null
 
-  # Custom reward function for validation
-  custom_reward_function:
-
-    # Path to validation reward function file
-    path: null
-
-    # Function name in the file
-    name: compute_score
-
   # Additional kwargs for validation reward function
   reward_kwargs: {}
-
-  # Sandbox fusion config for validation (if different from training)
-  sandbox_fusion:
-
-    # Cloud/local function URL for sandbox execution
-    url: null
-
-    # Max concurrent requests allowed to sandbox
-    max_concurrent: 64
-
-    # Max memory limit for each sandbox process in MB
-    memory_limit_mb: 1024
-  

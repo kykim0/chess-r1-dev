@@ -28,17 +28,18 @@ from spacy.language import Language
 from spacy_langdetect import LanguageDetector
 from spacy.tokens import Doc
 import torch
+from verl import DataProto
+from verl.utils.reward_score import gsm8k, countdown, think_chess, answer_chess, lichess, \
+                                    chess_best_move, chess_comparison, chess_mechanics, deepmind_lichess
+from verl.workers.reward_manager import register
+from verl.workers.reward_manager.abstract import AbstractRewardManager
 
 from searchless_chess.src import tokenizer
 from searchless_chess.src import training_utils
 from searchless_chess.src import transformer
 from searchless_chess.src import utils as sr_utils
 from searchless_chess.src.engines import neural_engines
-from verl import DataProto
-from verl.utils.reward_score import gsm8k, countdown, think_chess, answer_chess, lichess, \
-                                    chess_best_move, chess_comparison, chess_mechanics, deepmind_lichess
-from verl.workers.reward_manager import register
-from verl.workers.reward_manager.abstract import AbstractRewardManager
+
 
 def get_lang_detector(nlp, name):
     # Manually register the extensions that LanguageDetector needs
@@ -48,6 +49,7 @@ def get_lang_detector(nlp, name):
         Doc.set_extension("language_score", default=None)
 
     return LanguageDetector()
+
 
 if not Language.has_factory("language_detector"):
     Language.factory("language_detector", func=get_lang_detector)
@@ -74,6 +76,9 @@ def _select_rm_score_fn(data_source):
         return chess_mechanics.compute_score
     else:
         raise NotImplementedError
+
+
+# TODO(kykim): Clean up the aggregate reward logic.
 
 
 @register("chess_base")
@@ -113,7 +118,7 @@ class ChessRewardManager(AbstractRewardManager):
         self.lg_detector.add_pipe("language_detector")
 
         self.chess_model, self.return_buckets_values = self._setup_chess_model()
-        
+
     def _setup_chess_model(self):
         chess_model_type = self.chess_model_type
         num_return_buckets = 128
@@ -174,8 +179,6 @@ class ChessRewardManager(AbstractRewardManager):
     
     def __call__(self, data: DataProto, return_dict: bool = False) -> torch.Tensor | dict[str, Any]:
         """We will expand this function gradually based on the available datasets"""
-        st_time = time.time()
-
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
         if "rm_scores" in data.batch.keys():
             return data.batch["rm_scores"]
@@ -189,8 +192,8 @@ class ChessRewardManager(AbstractRewardManager):
                 fen_state = ground_truth.get("board_fen", "")
                 board_list.append(chess.Board(fen_state))
             precomputed_chess_results= self.chess_model.analyse_batch(boards=board_list)
-            # # Reshape the results back to (B, qvalue_dim)
-            precomputed_chess_qvalues_list = [np.inner(np.exp(result['log_probs']), self.return_buckets_values) for result in precomputed_chess_results]
+            # Reshape the results back to (B, qvalue_dim)
+            precomputed_chess_qvalues_list = [np.inner(np.exp(result["log_probs"]), self.return_buckets_values) for result in precomputed_chess_results]
         else:
             precomputed_chess_qvalues_list = [0.0 for i in range(len(data))]
 
@@ -198,26 +201,22 @@ class ChessRewardManager(AbstractRewardManager):
         correct_seq_tensor = torch.zeros(*(data.batch.batch_size), dtype=torch.int32)
 
         already_print_data_sources = {}
+        per_sample_metrics = defaultdict(list)
         agg_reward_logs = defaultdict(float)
         example_texts = []
 
         for i in range(len(data)):
-            data_item = data[i] # DataProtoItem
+            data_item = data[i]  # DataProtoItem
             precomputed_chess_qvalues = precomputed_chess_qvalues_list[i]
 
             prompt_ids = data_item.batch["prompts"]
-
             prompt_length = prompt_ids.shape[-1]
 
-            valid_prompt_length = data_item.batch["attention_mask"][
-                :prompt_length
-            ].sum()
+            valid_prompt_length = data_item.batch["attention_mask"][:prompt_length].sum()
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
             response_ids = data_item.batch["responses"]
-            valid_response_length = data_item.batch["attention_mask"][
-                prompt_length:
-            ].sum()
+            valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
             # decode
@@ -240,13 +239,19 @@ class ChessRewardManager(AbstractRewardManager):
                 answer_reward=self.answer_reward,
                 qvalue_reward_scaler=self.qvalue_reward_scaler
             )
-            
+
             reward_tensor[i, valid_response_length - 1] = score
             correct_seq_tensor[i] = correct_seq
 
+            for key, value in reward_logs.items():
+                per_sample_metrics[key].append(value)
+
             # aggregate logging metrics
             for key, value in reward_logs.items():
-                agg_reward_logs[key] += value
+                try:
+                    agg_reward_logs[key] += float(value)
+                except (ValueError, TypeError):
+                    pass
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
@@ -254,7 +259,7 @@ class ChessRewardManager(AbstractRewardManager):
             if already_print_data_sources[data_source] < self.num_examine:
                 already_print_data_sources[data_source] += 1
                 example_texts.append(sequences_str)
-        
+
         # normalize aggregate logging metrics
         normalized_agg_reward_logs = {}
         for key in agg_reward_logs.keys():
@@ -267,10 +272,7 @@ class ChessRewardManager(AbstractRewardManager):
         if return_dict:
             return {
                 "reward_tensor": reward_tensor,
-                "reward_extra_info": {
-                    "correct": correct_seq_tensor,
-                    "logs": normalized_agg_reward_logs,
-                },
+                "reward_extra_info": dict(per_sample_metrics),
             }
         return reward_tensor
 
@@ -286,11 +288,8 @@ class LichessRewardManager(AbstractRewardManager):
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
 
-    # def __call__(self, data: DataProto):
     def __call__(self, data: DataProto, return_dict: bool = False) -> torch.Tensor | dict[str, Any]:
         """We will expand this function gradually based on the available datasets"""
-        st_time = time.time()
-
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         correct_seq_tensor = torch.zeros(*(data.batch.batch_size), dtype=torch.int32)
 
@@ -298,25 +297,21 @@ class LichessRewardManager(AbstractRewardManager):
         per_id_rating = {}
 
         already_print_data_sources = {}
+        per_sample_metrics = defaultdict(list)
         agg_reward_logs = defaultdict(float)
         example_texts = []
 
         for i in range(len(data)):
-            data_item = data[i] # DataProtoItem
+            data_item = data[i]  # DataProtoItem
 
             prompt_ids = data_item.batch["prompts"]
-
             prompt_length = prompt_ids.shape[-1]
 
-            valid_prompt_length = data_item.batch["attention_mask"][
-                :prompt_length
-            ].sum()
+            valid_prompt_length = data_item.batch["attention_mask"][:prompt_length].sum()
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
             response_ids = data_item.batch["responses"]
-            valid_response_length = data_item.batch["attention_mask"][
-                prompt_length:
-            ].sum()
+            valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
             # decode
@@ -340,13 +335,19 @@ class LichessRewardManager(AbstractRewardManager):
                 ground_truth_dict=ground_truth_dict,
                 answer_reward=1.0,
             )
-            
+
             correct_seq_tensor[i] = correct_seq
             per_id_flags[pid].append(bool(correct_seq))
 
+            for key, value in reward_logs.items():
+                per_sample_metrics[key].append(value)
+
             # aggregate logging metrics
             for key, value in reward_logs.items():
-                agg_reward_logs[key] += value
+                try:
+                    agg_reward_logs[key] += float(value)
+                except (ValueError, TypeError):
+                    pass
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
@@ -392,15 +393,12 @@ class LichessRewardManager(AbstractRewardManager):
 
         normalized_agg_reward_logs["lichess_accuracy"] = lichess_accuracy
         normalized_agg_reward_logs.update(accuracy_by_rating_bin)
-        
+
         # return reward_tensor, correct_seq, normalized_agg_reward_logs
         if return_dict:
             return {
                 "reward_tensor": reward_tensor,
-                "reward_extra_info": {
-                    "correct": correct_seq_tensor,
-                    "logs": normalized_agg_reward_logs,
-                },
+                "reward_extra_info": dict(per_sample_metrics),
             }
         return reward_tensor
 
@@ -418,31 +416,25 @@ class ChessSFTRewardManager(AbstractRewardManager):
 
     def __call__(self, data: DataProto, return_dict: bool = False) -> torch.Tensor | dict[str, Any]:
         """We will expand this function gradually based on the available datasets"""
-        st_time = time.time()
-
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         correct_seq_tensor = torch.zeros(*(data.batch.batch_size), dtype=torch.int32)
 
         already_print_data_sources = {}
+        per_sample_metrics = defaultdict(list)
         agg_reward_logs = defaultdict(float)
         example_texts = []
 
         for i in range(len(data)):
-            data_item = data[i] # DataProtoItem
+            data_item = data[i]  # DataProtoItem
 
             prompt_ids = data_item.batch["prompts"]
-
             prompt_length = prompt_ids.shape[-1]
 
-            valid_prompt_length = data_item.batch["attention_mask"][
-                :prompt_length
-            ].sum()
+            valid_prompt_length = data_item.batch["attention_mask"][:prompt_length].sum()
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
             response_ids = data_item.batch["responses"]
-            valid_response_length = data_item.batch["attention_mask"][
-                prompt_length:
-            ].sum()
+            valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
             # decode
@@ -463,9 +455,15 @@ class ChessSFTRewardManager(AbstractRewardManager):
             
             correct_seq_tensor[i] = correct_seq
 
+            for key, value in reward_logs.items():
+                per_sample_metrics[key].append(value)
+
             # aggregate logging metrics
             for key, value in reward_logs.items():
-                agg_reward_logs[key] += value
+                try:
+                    agg_reward_logs[key] += float(value)
+                except (ValueError, TypeError):
+                    pass
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
@@ -486,9 +484,6 @@ class ChessSFTRewardManager(AbstractRewardManager):
         if return_dict:
             return {
                 "reward_tensor": reward_tensor,
-                "reward_extra_info": {
-                    "correct": correct_seq_tensor,
-                    "logs": normalized_agg_reward_logs,
-                },
+                "reward_extra_info": dict(per_sample_metrics),
             }
         return reward_tensor
