@@ -49,6 +49,7 @@ class BaseCheckpointManager:
         checkpoint_config: DictConfig | CheckpointConfig = None,
     ):
         self.checkpoint_config = checkpoint_config
+        self.keep_hf_model = checkpoint_config.get("keep_hf_model", False) if self.checkpoint_config else False
         checkpoint_load_contents = checkpoint_config.get("load_contents", None) if checkpoint_config else None
         checkpoint_save_contents = checkpoint_config.get("save_contents", None) if checkpoint_config else None
         if checkpoint_load_contents is None:
@@ -139,7 +140,27 @@ class BaseCheckpointManager:
             print(f"Checkpoint manager remove previous save local path: {abs_path}")
             if not os.path.exists(abs_path):
                 continue
-            shutil.rmtree(abs_path, ignore_errors=True)
+            if self.keep_hf_model:
+                print(f"  Keeping huggingface/ directory for evaluation")
+
+                # List all items in the checkpoint directory.
+                for item in os.listdir(abs_path):
+                    item_path = os.path.join(abs_path, item)
+
+                    # Keep the huggingface directory and data.pt (dataloader state).
+                    if item in ("huggingface", "data.pt"):
+                        continue
+
+                    # Delete everything else (model shards, optimizer shards, etc.).
+                    try:
+                        if os.path.isfile(item_path):
+                            os.remove(item_path)
+                        elif os.path.isdir(item_path):
+                            shutil.rmtree(item_path, ignore_errors=True)
+                    except Exception as e:
+                        print(f"  Warning: Failed to delete {item_path}: {e}")
+            else:
+                shutil.rmtree(abs_path, ignore_errors=True)
 
     @staticmethod
     def get_rng_state():

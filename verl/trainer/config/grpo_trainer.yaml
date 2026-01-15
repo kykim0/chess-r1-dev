@@ -10,6 +10,12 @@ defaults:
   - override reward_model@reward_model: chess_reward_model
   - _self_
 
+actor_rollout_ref:
+  actor:
+    checkpoint:
+      save_contents: ["model", "optimizer", "extra", "hf_model"]
+      keep_hf_model: true
+
 # Algorithm configuration
 algorithm:
   gamma: 1.0
@@ -31,6 +37,7 @@ trainer:
   n_gpus_per_node: 4
   save_freq: -1
   test_freq: -1
+  max_actor_ckpt_to_keep: -1
 
 # Data configuration (remains similar)
 data:
