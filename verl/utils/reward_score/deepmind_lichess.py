@@ -1,16 +1,9 @@
 import re
-import random
-import chess
-import time
-import torch
-import numpy as np
-
 from typing import Dict, Tuple, Optional
-from searchless_chess.src.engines import engine
 
 
 def extract_solution(solution_str: str, logs: dict) -> Tuple[Optional[str], str, dict]:
-    """Extract the final answer from the model's response string by isolating the assistant's output.
+    """Extract the final answer from the model"s response string by isolating the assistant"s output.
     
     Args:
         solution_str: Raw response string from the language model
@@ -34,39 +27,37 @@ def extract_solution(solution_str: str, logs: dict) -> Tuple[Optional[str], str,
         return None, solution_str, logs
 
     # Extract final answer using XML-style tags
-    answer_pattern = r'<answer>(.*?)</answer>'
+    answer_pattern = r"<answer>(.*?)</answer>"
     matches = list(re.finditer(answer_pattern, processed_str, re.DOTALL))
     
     if not matches:
         return None, processed_str, logs
     else:
-        logs['format'] = 1
+        logs["format"] = 1
         final_answer = matches[-1].group(1).strip()
         return final_answer, processed_str, logs
+
 
 def compute_score(
     solution_str: str,
     ground_truth_dict: Dict[str, str],
     answer_reward: float = 1.0,
 ) -> float:
-    """
-    Computes comprehensive score for model response.
-    """
-
-    # Parse ground truth data
-    answer = ground_truth_dict['answer']
+    """Computes comprehensive score for model response."""
+    # Parse ground truth data.
+    answer = ground_truth_dict["answer"]
 
     # Initialize log metrics
-    logs = {'format': 0, 'accuracy': 0, }
+    logs = {"format": 0, "accuracy": 0}
 
     # Extract model answer (pass logs to the function)
     answer_text, processed_str, logs = extract_solution(solution_str, logs)
-    
+
     try:
         if answer_text:
             correct = answer_text == answer
             if correct:
-                logs['accuracy'] = 1
+                logs["accuracy"] = 1
         else:
             correct = 0.0
     except Exception as e:
