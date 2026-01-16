@@ -24,3 +24,18 @@ fastapi
 latex2sympy2_extended
 math_verify
 tensorboard
+
+# dependencies needed for the chess logic in addition to the verl dependencies.
+chess
+chex==0.1.89
+dm-haiku
+gdown
+google-cloud-storage
+grain
+ipdb
+jax==0.5.2
+jaxtyping==0.2.38
+optax==0.2.4
+orbax-checkpoint==0.11.8
+spacy_fastlang
+spacy-langdetect

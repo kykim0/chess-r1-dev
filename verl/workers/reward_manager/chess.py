@@ -111,7 +111,11 @@ class ChessRewardManager(AbstractRewardManager):
 
         # language detector
         spacy.require_gpu()
-        self.lg_detector = spacy.load("en_core_web_lg")
+        en_model_name = "en_core_web_lg"
+        if not spacy.util.is_package(en_model_name):
+            print(f"Model '{en_model_name}' not found. Downloading...")
+            spacy.cli.download(en_model_name)
+        self.lg_detector = spacy.load(en_model_name)
         for pipe_name in self.lg_detector.pipe_names: # Remove all existing pipes
             self.lg_detector.remove_pipe(pipe_name)
         self.lg_detector.add_pipe("sentencizer")
@@ -123,14 +127,14 @@ class ChessRewardManager(AbstractRewardManager):
         chess_model_type = self.chess_model_type
         num_return_buckets = 128
         match chess_model_type:
-            case 'action_value':
+            case "action_value":
                 output_size = num_return_buckets
-            case 'behavioral_cloning':
+            case "behavioral_cloning":
                 output_size = sr_utils.NUM_ACTIONS
-            case 'state_value':
+            case "state_value":
                 output_size = num_return_buckets
             case _:
-                raise ValueError(f'Unknown chess model type: {chess_model_type}')
+                raise ValueError(f"Unknown chess model type: {chess_model_type}")
 
         predictor_config = transformer.TransformerConfig(
             vocab_size=sr_utils.NUM_ACTIONS,
@@ -150,7 +154,7 @@ class ChessRewardManager(AbstractRewardManager):
         # Load the predictor parameters
         checkpoint_dir = os.path.join(
             os.getcwd(),
-            f'searchless_chess/checkpoints/270M',
+            f"searchless_chess/checkpoints/270M",
         )
         dummy_params = predictor.initial_params(
             rng=jrandom.PRNGKey(0),
@@ -263,10 +267,10 @@ class ChessRewardManager(AbstractRewardManager):
         # normalize aggregate logging metrics
         normalized_agg_reward_logs = {}
         for key in agg_reward_logs.keys():
-            normalized_agg_reward_logs[f'reward/{key}'] = agg_reward_logs[key] / len(data)
+            normalized_agg_reward_logs[f"reward/{key}"] = agg_reward_logs[key] / len(data)
         
         # add a single sequence_str as an example
-        normalized_agg_reward_logs[f'generation/text'] = "\n\n".join(example_texts)
+        normalized_agg_reward_logs[f"generation/text"] = "\n\n".join(example_texts)
 
         # return reward_tensor, correct_seq_tensor, normalized_agg_reward_logs
         if return_dict:
@@ -359,10 +363,10 @@ class LichessRewardManager(AbstractRewardManager):
         # normalize aggregate logging metrics
         normalized_agg_reward_logs = {}
         for key in agg_reward_logs.keys():
-            normalized_agg_reward_logs[f'reward/{key}'] = agg_reward_logs[key] / len(data)
+            normalized_agg_reward_logs[f"reward/{key}"] = agg_reward_logs[key] / len(data)
         
         # add a single sequence_str as an example
-        normalized_agg_reward_logs[f'generation/text'] = "\n\n".join(example_texts)
+        normalized_agg_reward_logs[f"generation/text"] = "\n\n".join(example_texts)
 
         # compute “all‐correct” per puzzle:
         num_lichess_correct = 0
@@ -388,7 +392,7 @@ class LichessRewardManager(AbstractRewardManager):
         # finally, accuracy per rating bin
         accuracy_by_rating_bin = {
             label: bin_correct_counts[label] / bin_total_counts[label]
-            for label in sorted(bin_total_counts, key=lambda lb: int(lb.split('-')[1]))
+            for label in sorted(bin_total_counts, key=lambda lb: int(lb.split("-")[1]))
         }
 
         normalized_agg_reward_logs["lichess_accuracy"] = lichess_accuracy
@@ -475,10 +479,10 @@ class ChessSFTRewardManager(AbstractRewardManager):
         # normalize aggregate logging metrics
         normalized_agg_reward_logs = {}
         for key in agg_reward_logs.keys():
-            normalized_agg_reward_logs[f'reward/{key}'] = agg_reward_logs[key] / len(data)
+            normalized_agg_reward_logs[f"reward/{key}"] = agg_reward_logs[key] / len(data)
         
         # add a single sequence_str as an example
-        normalized_agg_reward_logs[f'generation/text'] = "\n\n".join(example_texts)
+        normalized_agg_reward_logs[f"generation/text"] = "\n\n".join(example_texts)
         
         # return reward_tensor, correct_seq, normalized_agg_reward_logs
         if return_dict:

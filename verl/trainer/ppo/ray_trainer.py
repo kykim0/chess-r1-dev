@@ -623,8 +623,6 @@ class RayPPOTrainer:
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
 
-        self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
-
         # dump generations
         val_data_dir = self.config.trainer.get("validation_data_dir", None)
         if val_data_dir:
@@ -639,6 +637,12 @@ class RayPPOTrainer:
 
         for key_info, lst in reward_extra_infos_dict.items():
             assert len(lst) == 0 or len(lst) == len(sample_scores), f"{key_info}: {len(lst)=}, {len(sample_scores)=}"
+
+        score_dicts = [
+            {key: values[idx] for key, values in reward_extra_infos_dict.items()}
+            for idx in range(len(sample_scores))
+        ]
+        self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=score_dicts)
 
         data_sources = np.concatenate(data_source_lst, axis=0)
 
