@@ -1,7 +1,7 @@
 # requirements.txt records the full set of dependencies for development
 accelerate
 codetiming
-datasets
+datasets==4.4.2
 dill
 hydra-core
 liger-kernel
