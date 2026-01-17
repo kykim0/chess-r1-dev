@@ -40,6 +40,8 @@ def compute_score(
         raise ValueError(f"Unsupported chess data source: {data_source}")
 
     # Initialize log metrics.
+    # Note that when evaluating on multiple datasets, the log dict keys need
+    # to match across datasets to appease _validate() in ray_trainer.py.
     logs = {"format": 0, "accuracy": 0}
 
     # Extract model answer (pass logs to the function).
@@ -61,6 +63,4 @@ def compute_score(
     except Exception as e:
         print("\n[Content Validation] Skipped due to format errors or missing answer:", e)                
 
-    # Include the data source in the keys.
-    logs = {f"{key}_{data_source}": value for key, value in logs.items()}
     return reward, correct, logs
