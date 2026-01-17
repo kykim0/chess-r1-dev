@@ -116,7 +116,10 @@ def _next_state_conv(example):
             f"Given a board state in FEN and a move in SAN, output the resulting board state in FEN after applying the move. "
             f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
         )
-        return base_inst
+        reasoning_inst = f"The reasoning process should describe the analysis used to derive the next board state in FEN from the current position and move."
+        format_inst = "The answer must be in FEN within <answer> </answer> tags, e.g., <answer> 6rk/ppp2R1p/7Q/4P3/8/2q4P/P5r1/5R1K b - - 1 27 </answer>."
+        system_message = "\n".join([base_inst, reasoning_inst, format_inst])
+        return system_message.strip()
 
     def _user_message(example):
         board_fen = example["board_fen"]
@@ -143,7 +146,10 @@ def _legal_moves_conv(example):
             f"Given a board state in FEN, list all moves in SAN that are legal from the current position. "
             f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
         )
-        return base_inst
+        reasoning_inst = f"The reasoning process should describe the analysis of the current position used to determine all legal moves."
+        format_inst = "Provide space-separated SAN moves within <answer> </answer> tags, e.g., <answer> Nf3 Rxf2 c5 </answer>."
+        system_message = "\n".join([base_inst, reasoning_inst, format_inst])
+        return system_message.strip()
 
     def _user_message():
         board_fen = example["board_fen"]
@@ -168,7 +174,13 @@ def _state_f2a_conv(example):
             f"Given a board state in FEN, output the same board state in ASCII format, with each rank separated by a newline. "
             f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
         )
-        return base_inst
+        reasoning_inst = f"The reasoning process should explain how the current position in FEN maps to its ASCII representation."
+        format_inst = (
+            f"Provide the board state in ASCII within <answer> </answer> tags,"
+            f" e.g., <answer> . . . . . . r k \n p p p . . R . p \n . . . . . . . Q \n . . . . P . . . \n . . . . . . . . \n . . q . . . . P \n P . . . . . r . \n . . . . . R K . </answer>."
+        )
+        system_message = "\n".join([base_inst, reasoning_inst, format_inst])
+        return system_message.strip()
 
     def _user_message():
         board_fen = example["board_fen"]
@@ -193,7 +205,11 @@ def _state_a2f_conv(example):
             f"Given a board state in ASCII format, output the same board state in FEN. "
             f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
         )
-        return base_inst
+        ###
+        reasoning_inst = f"The reasoning process should explain how the current position in ASCII maps to its FEN representation."
+        format_inst = f"Provide the board state in FEN within <answer> </answer> tags, e.g., <answer> 6rk/ppp2R1p/7Q/4P3/8/6qP/P7/5R1K b - - 2 29 </answer>."
+        system_message = "\n".join([base_inst, reasoning_inst, format_inst])
+        return system_message.strip()
 
     def _user_message():
         board_str = example["board_str"]
