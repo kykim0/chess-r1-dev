@@ -11,13 +11,7 @@
 #SBATCH --exclude=node4
 
 export WANDB_API_KEY=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
-
 export HYDRA_FULL_ERROR=1
-# export NCCL_DEBUG=INFO
-# export NCCL_DEBUG_SUBSYS=ALL
-# export TORCH_DISTRIBUTED_DEBUG=DETAIL
-# export NCCL_P2P_DISABLE=1
-# export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Environment variables.
 export N_GPUS=4
@@ -29,14 +23,12 @@ export ROLLOUT_TP_SIZE=1  # Set tensor parallel
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 # Define model and dataset
-export DATA_DIR=${DATA_DIR:-"data/qwen3"}
+export DATA_DIR=${DATA_DIR:-"data/verl"}
 export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-8B"}
 
 # Experiment metadata
-# export USER_NAME=${USER_NAME:-"USER"}
 export PROJECT_NAME=${PROJECT_NAME:-"chess-r1"}
-# export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Nochessdata_yesreastemp_fen_legal_rule_yesRLfeedback"}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Qwen3-8B"}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"legal-rules"}
 
 timestamp=$(date +"%m%d-%H%M")
 DATA_NAME=$(basename "$DATA_DIR")       
@@ -57,14 +49,14 @@ trainer_args=" \
     trainer.n_gpus_per_node=$N_GPUS \
     trainer.nnodes=1 \
     trainer.save_freq=10 \
-    trainer.test_freq=15 \
-    trainer.total_training_steps=150 \
+    trainer.test_freq=10 \
+    trainer.total_training_steps=100 \
     trainer.resume_from_path=False \
     trainer.default_local_dir=$CHECKPOINT_DIR \
     trainer.val_before_train=true \
     trainer.max_actor_ckpt_to_keep=1 \
     trainer.rollout_data_dir=$LOG_DIR/rollouts \
-    trainer.log_val_generations=1024 \
+    trainer.log_val_generations=4096 \
 "
 
 # batch_size: data.train_batch_size * actor.num_response
@@ -73,10 +65,9 @@ trainer_args=" \
 # actor.micro_batch_size_per_gpu: batch size per gpu for gradient accum
 # updates per rollout: actor.epochs * (batch_size / actor.mini_batch_size)
 data_args=" \
-    data.train_files=$DATA_DIR/train.parquet \
-    data.val_files=$DATA_DIR/valid.parquet \
+    data.train_files=$DATA_DIR/train_legal-rules-detailed.parquet \
+    data.val_files=$DATA_DIR/valid_legal-rules-detailed.parquet \
     data.train_batch_size=128 \
-    data.val_max_samples=1024 \
     data.max_prompt_length=1024 \
     data.max_response_length=4096 \
     data.dataloader_num_workers=0 \
