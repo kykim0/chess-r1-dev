@@ -2,11 +2,11 @@
 
 Example usage:
 $ python custom_lichess.py \
-    --save_dir ./data \
-    --save_filename train \
-    --data_path ./data/ours/puzzles_train_processed.csv \
-    --model_name Qwen/Qwen3-0.6B \
+    --save_dir ./data/verl \
+    --save_filename train_legal-rules-detailed \
+    --data_path ./data/lichess_db_puzzle_recent/puzzles_train_processed.csv \
     --template_type legal/rules/detailed \
+    --data_source lichess \
     --num_samples 100000
 """
 
@@ -16,124 +16,212 @@ import os
 
 from datasets import Dataset
 import pandas as pd
-from transformers import AutoTokenizer
 
 
-def get_value(record, key):
-    return record.get(key, "")
+def _optimal_move_conv(example, config):
+    """Creates a conversation for the optimal move task."""
 
+    def _system_message(
+        include_legal_moves=True,
+        include_rules=True,
+        include_pgn=False,
+        reasoning_detail="detailed",
+    ):
+        base_inst = (
+            f"You are a helpful assistant who plays chess professionally. "
+            f"First, think through the reasoning process internally and then provide the user with the best move. "
+            f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
+        )
 
-def make_system_message(
-    include_legal_moves=True,
-    include_rules=True,
-    include_table=False,
-    include_pgn=False,
-    reasoning_detail="standard",
-):
-    """Creates a dynamic system message based on the requested features."""
+        if reasoning_detail == "detailed":
+            reasoning_inst = "\n".join([
+                f"The reasoning process should describe how you analyze the position and decide on the best move, including:"
+                f"- A strategic evaluation of the position."
+                f"- A comparison of key candidate moves."
+                f"- For each candidate, consider the opponent's likely response and outcome."
+                f"- Conclude with a clear justification for the final choice."
+            ])
+        else:
+            reasoning_inst = f"The reasoning process should describe how you analyze the position and decide on the best move."
 
-    base_instructions = """You are a helpful assistant who plays chess professionally.
-First think through the reasoning process internally and then provides the user with the best move.
-The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."""
-    
-    if reasoning_detail == "detailed":
-        reasoning_instructions = """The reasoning process should describe how you analyze the position and decide on the best move, including:
-  - A strategic evaluation of the position.
-  - A comparison of key candidate moves.
-  - For each candidate, consider the opponent's likely response and outcome.
-  - Conclude with a clear justification for the final choice."""
-    else:
-        reasoning_instructions = "The reasoning process should describe how you analyze the position and decide on the best move."
-    
-    answer_format = """The answer must be in SAN notation, strictly using the moving piece and the destination square (e.g., Nf3, Rxf2, c5)."""
-    
-    context_info = "Now, the user provides a FEN string"
-    if include_legal_moves:
-        context_info += ", and a list of legal moves for the given board"
-    if include_pgn:
-        context_info += ", the PGN representing the game history up to the current FEN position"
-    if include_table:
-        context_info += ", and a square by square chess piece position table"
-    context_info += "."
-    
-    final_instruction = """After analyzing the position, clearly state the best move in SAN notation within <answer> </answer> tags. i.e., <answer> Nf3 </answer>"""
-    
-    rules_reminder = ""
-    if include_rules:
-        rules_reminder = """
-Reminder of chess rules:
-- Bishops move diagonally.
-- Rooks move horizontally or vertically.
-- Knights jump in an L-shape.
-- Queens combine rook and bishop movement.
-- Kings move one square in any direction.
-- Pawns move forward, capture diagonally, and can promote."""
-    
-    system_message = "\n".join([
-        base_instructions,
-        reasoning_instructions,
-        answer_format,
-        context_info,
-        final_instruction,
-        rules_reminder,
-    ])
-    return system_message.strip()
+        format_inst = "The answer must be in SAN notation, restricted to the moving piece and destination square (e.g., Nf3, Rxf2, c5)."
 
+        context_info = "Now, the user provides the board in FEN format"
+        if include_legal_moves:
+            context_info += ", a list of legal moves for the given board"
+        if include_pgn:
+            context_info += ", the PGN representing the game history up to the current FEN position"
+        context_info += "."
 
-def make_user_message(chess_record, include_legal_moves=True, include_table=False, include_pgn=False):
-    """Creates a dynamic user message based on the requested features."""
-    board_fen = get_value(chess_record, "board_fen")
-    legal_moves_san = get_value(chess_record, "legal_moves_san")
-    piece_table = get_value(chess_record, "piece_table")
-    prev_moves_san_numbering = get_value(chess_record, "prev_moves_san_numbering")
+        final_inst = "After analyzing the position, clearly state the best move in SAN notation within <answer> </answer> tags. i.e., <answer> Nf3 </answer>."
 
-    user_content = f"Current FEN string: {board_fen}"
-    if include_legal_moves and legal_moves_san:
-        user_content += f"\nLegal moves: {legal_moves_san}"
-    if include_pgn and prev_moves_san_numbering:
-        user_content += f"\nPGN leading to FEN: {prev_moves_san_numbering}"
-    if include_table and piece_table:
-        user_content += f"\nChess piece position table: {piece_table}"
-    return user_content
+        rules_reminder = ""
+        if include_rules:
+            rules_reminder = "\n".join([
+                f"Reminder of chess rules:"
+                f"- Bishops move diagonally."
+                f"- Rooks move horizontally or vertically."
+                f"- Knights jump in an L-shape."
+                f"- Queens combine rook and bishop movements."
+                f"- Kings move one square in any direction."
+                f"- Pawns move forward, capture diagonally, and can promote."
+            ])
 
+        system_message = "\n".join([base_inst, reasoning_inst, format_inst, context_info, final_inst, rules_reminder])
+        return system_message.strip()
 
-def make_prompt_with_tokenizer(tokenizer, chess_record, config):
-    """Creates a prompt using the tokenizer's chat template.
-    
-    Args:
-        tokenizer: The model's tokenizer with apply_chat_template
-        chess_record: Dictionary containing chess game data
-        config: Dictionary with configuration for what to include
-    """
+    def _user_message(example, include_legal_moves=True, include_pgn=False):
+        board_fen = example["board_fen"]
+        legal_moves_san = example["legal_moves_san"]
+        prev_moves_san_numbering = example["prev_moves_san_numbering"]
+
+        user_content = f"Current board in FEN: {board_fen}."
+        if include_legal_moves and legal_moves_san:
+            user_content += f"\nLegal moves: {legal_moves_san}."
+        if include_pgn and prev_moves_san_numbering:
+            user_content += f"\nPGN leading to the FEN: {prev_moves_san_numbering}."
+        return user_content
+
     # Extract configs.
     include_legal_moves = config.get("include_legal_moves", True)
     include_rules = config.get("include_rules", True)
-    include_table = config.get("include_table", False)
     include_pgn = config.get("include_pgn", False)
-    reasoning_detail = config.get("reasoning_detail", "standard")
+    reasoning_detail = config.get("reasoning_detail", "detailed")
 
     # Build the conversation.
-    messages = []
-
-    # System message.
-    system_message = make_system_message(
+    system_message = _system_message(
         include_legal_moves=include_legal_moves,
         include_rules=include_rules,
-        include_table=include_table,
         include_pgn=include_pgn,
-        reasoning_detail=reasoning_detail
+        reasoning_detail=reasoning_detail,
     )
-    messages.append({"role": "system", "content": system_message})
-
-    # User message.
-    user_message = make_user_message(
-        chess_record,
+    user_message = _user_message(
+        example,
         include_legal_moves=include_legal_moves,
-        include_table=include_table,
-        include_pgn=include_pgn
+        include_pgn=include_pgn,
     )
-    messages.append({"role": "user", "content": user_message})
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ]
+    return messages
 
+
+def _next_state_conv(example):
+    """Creates a conversation for the next state prediction task."""
+
+    def _system_message():
+        base_inst = (
+            f"You are a helpful assistant with a strong understanding of chess. "
+            f"Given a board state in FEN and a move in SAN, output the resulting board state in FEN after applying the move. "
+            f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
+        )
+        return base_inst
+
+    def _user_message(example):
+        board_fen = example["board_fen"]
+        next_move_san = example["next_move_san"]
+        user_content = f"Current board in FEN: {board_fen}."
+        user_content += f"\nNext move in SAN: {next_move_san}."
+        return user_content
+
+    system_message = _system_message()
+    user_message = _user_message(example)
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ]
+    return messages
+
+
+def _legal_moves_conv(example):
+    """Creates a conversation for the legal move prediction task."""
+
+    def _system_message():
+        base_inst = (
+            f"You are a helpful assistant with a strong understanding of how chess is played. "
+            f"Given a board state in FEN, list all moves in SAN that are legal from the current position. "
+            f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
+        )
+        return base_inst
+
+    def _user_message():
+        board_fen = example["board_fen"]
+        user_content = f"Current board in FEN: {board_fen}."
+        return user_content
+
+    system_message = _system_message()
+    user_message = _user_message()
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ]
+    return messages
+
+
+def _state_f2a_conv(example):
+    """Creates a conversation for the FEN-to-ASCII translation task."""
+
+    def _system_message():
+        base_inst = (
+            f"You are a helpful assistant with a strong understanding of different chess board representations. "
+            f"Given a board state in FEN, output the same board state in ASCII format, with each rank separated by a newline. "
+            f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
+        )
+        return base_inst
+
+    def _user_message():
+        board_fen = example["board_fen"]
+        user_content = f"Current board in FEN: {board_fen}."
+        return user_content
+
+    system_message = _system_message()
+    user_message = _user_message()
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ]
+    return messages
+
+
+def _state_a2f_conv(example):
+    """Creates a conversation for the ASCII-to-FEN translation task."""
+
+    def _system_message():
+        base_inst = (
+            f"You are a helpful assistant with a strong understanding of different chess board representations. "
+            f"Given a board state in ASCII format, output the same board state in FEN. "
+            f"The reasoning process and the answer must be enclosed within <think> </think> and <answer> </answer> tags, respectively."
+        )
+        return base_inst
+
+    def _user_message():
+        board_str = example["board_str"]
+        user_content = f"Current board in ASCII: {board_str}."
+        return user_content
+
+    system_message = _system_message()
+    user_message = _user_message()
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ]
+    return messages
+
+
+def make_conversation(example, config, data_source):
+    if data_source in ("lichess", "deepmind_lichess_accuracy"):
+        messages = _optimal_move_conv(example, config)
+    elif data_source == "next_state":
+        messages = _next_state_conv(example)
+    elif data_source == "legal_moves":
+        messages = _legal_moves_conv(example)
+    elif data_source == "state_f2a":
+        messages = _state_f2a_conv(example)
+    elif data_source == "state_a2f":
+        messages = _state_a2f_conv(example)
+    else:
+        raise ValueError(f"Unsupported data source: {data_source}")
     return messages
 
 
@@ -142,7 +230,6 @@ def parse_template_config(template_type):
     config = {
         "include_legal_moves": False,
         "include_rules": False,
-        "include_table": False,
         "include_pgn": False,
         "reasoning_detail": "standard"
     }
@@ -150,8 +237,6 @@ def parse_template_config(template_type):
         config["include_legal_moves"] = True
     if "rule" in template_type:
         config["include_rules"] = True
-    if "table" in template_type:
-        config["include_table"] = True
     if "pgn" in template_type:
         config["include_pgn"] = True
     if "reastemp" in template_type or "detailed" in template_type:
@@ -164,19 +249,12 @@ if __name__ == "__main__":
     parser.add_argument("--save_dir", type=str, default="./data")
     parser.add_argument("--save_filename", type=str, default=None, required=True)
     parser.add_argument("--data_path", type=str, default=None, required=True)
-    parser.add_argument("--model_name", type=str, required=True, 
-                        help="Model name to load tokenizer from (e.g., Qwen/Qwen2.5-7B-Instruct)")
     parser.add_argument("--template_type", type=str, default="legal-rule",
                         help="Template configuration: combinations of legal, rule, table, pgn, detailed (e.g., 'legal-rule' or 'legal-rule_table-pgn')")
+    parser.add_argument("--data_source", type=str, default=None, required=True)
     parser.add_argument("--num_samples", type=int, default=None)
 
     args = parser.parse_args()
-
-    # Load tokenizer.
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name,
-        trust_remote_code=True,
-    )
 
     # Parse template configuration.
     config = parse_template_config(args.template_type)
@@ -201,12 +279,16 @@ if __name__ == "__main__":
             f"Dataset has {len(raw_dataset)} examples but need {args.num_samples}"
         raw_dataset = raw_dataset.select(range(args.num_samples))
 
+    data_source = args.data_source
+    # TODO(kykim): A hack for backward compatibility.
+    if data_source == "lichess" and "valid" in args.save_filename:
+        data_source = "deepmind_lichess_accuracy"
+
     def make_map_fn(split):
         def process_fn(example, idx):
-            # Generate prompt using tokenizer's chat template.
-            messages = make_prompt_with_tokenizer(tokenizer, example, config)
+            messages = make_conversation(example, config, data_source)
             data = {
-                "data_source": "lichess",  # lichess, deepmind_lichess_accuracy
+                "data_source": data_source,  # lichess, deepmind_lichess_accuracy
                 "prompt": messages,
                 "ability": "chess",
                 "reward_model": {
@@ -216,6 +298,7 @@ if __name__ == "__main__":
                         "answer": example["next_move_san"],
                         "rating": example["rating"],
                         "board_fen": example["board_fen"],
+                        "board_str": example["board_str"],
                         "next_move_san": example["next_move_san"],
                         "legal_moves_san": example["legal_moves_san"],
                     }
@@ -223,7 +306,6 @@ if __name__ == "__main__":
                 "extra_info": {
                     "split": split,
                     "index": idx,
-                    "model_name": args.model_name,
                     "template_config": config,
                 }
             }
@@ -234,8 +316,7 @@ if __name__ == "__main__":
     raw_dataset = raw_dataset.map(function=make_map_fn(args.save_filename), with_indices=True)
 
     # Create local directory if needed.
-    model_id = args.model_name.split("/")[-1].split("-")[0].lower()
-    save_dir = os.path.join(args.save_dir, f"{model_id}")
+    save_dir = args.save_dir
     os.makedirs(os.path.expanduser(save_dir), exist_ok=True)
 
     filename = f"{args.save_filename}.parquet"

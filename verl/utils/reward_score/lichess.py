@@ -1,47 +1,11 @@
-import re
+from typing import Dict, List, Tuple
+
 import chess
-import torch
 import numpy as np
+import torch
 
-from typing import Dict, List, Optional, Tuple
 from searchless_chess.src.engines import engine
-
-
-def extract_solution(solution_str: str, logs: dict) -> Tuple[Optional[str], str, dict]:
-    """Extract the final answer from the model"s response string by isolating the assistant's output.
-    
-    Args:
-        solution_str: Raw response string from the language model
-        logs: Dictionary to store logging metrics.
-        
-    Returns:
-        Tuple containing (extracted_answer, processed_string, logs)
-    """
-    header_markers = [
-        "Assistant:",
-        "<|start_header_id|>assistant<|end_header_id|><|begin_of_text|>",
-        "<|im_start|>assistant"
-    ]
-    processed_str = None
-    for marker in header_markers:
-        if marker in solution_str:
-            processed_str = solution_str.split(marker, 1)[1]
-            break
-    if processed_str is None:
-        print("[Error] Failed to locate model response header")
-        return None, solution_str, logs
-
-    # Extract final answer using XML-style tags
-    answer_pattern = r'<answer>(.*?)</answer>'
-    matches = list(re.finditer(answer_pattern, processed_str, re.DOTALL))
-    
-    if not matches:
-        return None, processed_str, logs
-    else:
-        logs["format"] = 1
-        final_answer = matches[-1].group(1).strip()
-        logs["answer_text"] = final_answer
-        return final_answer, processed_str, logs
+from verl.utils.reward_score.chess_utils import extract_solution
 
 
 def validate_response_structure(processed_str: str, logs: dict) -> Tuple[bool, dict]:
@@ -56,12 +20,12 @@ def validate_response_structure(processed_str: str, logs: dict) -> Tuple[bool, d
     """
     validation_passed = True
 
-    # Check required tags
+    # Check required tags.
     tags = {
-        'think_start': ('<think>', 1),
-        'think_end': ('</think>', 1),
-        'answer_start': ('<answer>', 1),
-        'answer_end': ('</answer>', 1)
+        "think_start": ("<think>", 1),
+        "think_end": ("</think>", 1),
+        "answer_start": ("<answer>", 1),
+        "answer_end": ("</answer>", 1)
     }
 
     positions = {}
@@ -70,36 +34,34 @@ def validate_response_structure(processed_str: str, logs: dict) -> Tuple[bool, d
         positions[tag_name] = processed_str.find(tag_str)
         if count != expected_count:
             validation_passed = False
-            logs['format'] = 0
+            logs["format"] = 0
             return validation_passed, logs
 
     # Verify tag order: <think> ... </think> ... <answer> ... </answer>
-    if (positions['think_start'] > positions['think_end'] or
-        positions['think_end'] > positions['answer_start'] or
-        positions['answer_start'] > positions['answer_end']):
+    if (positions["think_start"] > positions["think_end"] or
+        positions["think_end"] > positions["answer_start"] or
+        positions["answer_start"] > positions["answer_end"]):
         validation_passed = False
-        logs['format'] = 0
+        logs["format"] = 0
     else:
-        logs['format'] = 1
+        logs["format"] = 1
     
     return validation_passed, logs
 
 
 def _update_optimal_logs(num_legal_moves: int, logs: dict) -> None:
-    """
-    Updates logs with counters based on the number of legal moves.
-    """
+    """Updates logs with counters based on the number of legal moves."""
     if num_legal_moves <= 10:
-        logs['optimal/1_10_moves'] = 1
+        logs["optimal/1_10_moves"] = 1
     elif num_legal_moves <= 20:
-        logs['optimal/11_20_moves'] = 1
+        logs["optimal/11_20_moves"] = 1
     elif num_legal_moves <= 30:
-        logs['optimal/21_30_moves'] = 1
+        logs["optimal/21_30_moves"] = 1
     elif num_legal_moves <= 40:
-        logs['optimal/31_40_moves'] = 1
+        logs["optimal/31_40_moves"] = 1
     else:
-        logs['optimal/over40_moves'] = 1
-    logs['optimal'] = 1
+        logs["optimal/over40_moves"] = 1
+    logs["optimal"] = 1
 
     return logs
 
@@ -111,8 +73,7 @@ def validate_chess_move_qvalue(
     legal_moves: List[str],
     logs: dict,
 ) -> Tuple[float, dict]:
-    """
-    Validates a chess move for a given FEN string and assigns a score based on the validation rules.
+    """Validates a chess move for a given FEN string and assigns a score based on the rules.
     
     Args:
         fen (str): The FEN string representing the board state.
@@ -127,9 +88,7 @@ def validate_chess_move_qvalue(
     board = chess.Board(fen)
     use_answer_reward = False
 
-    # strong penalty for
-    # 1. not following san format
-    # 2. following san format but illegal move
+    # Strong penalty for (1) not following the SAN format and (2) illegal moves.
     try:
         move_uci  = board.parse_san(move).uci()
     except ValueError:
@@ -152,11 +111,11 @@ def validate_chess_move_qvalue(
         use_answer_reward = True
         logs = _update_optimal_logs(len(legal_moves), logs)
 
-    # compute regret
+    # Compute regret.
     optimal_move_qvalue = chess_model_qvalues[sorted_win_indices[0]] # qvalue of optimal move for current board
     logs["optimal_q_value_gap"] = move_qvalue - optimal_move_qvalue
 
-    # the rank of our selected move
+    # The rank of our selected move.
     move_rank = int(np.where(sorted_win_indices == selected_index)[0][0]) + 1 
     # Normalizes the rank into a score between 0 and 1, where 1 means we've done well, and 0 means we've done really bad
     logs["normalized_rank"] = (chess_model_qvalues.shape[0] - move_rank)/chess_model_qvalues.shape[0]
@@ -171,8 +130,7 @@ def validate_chess_move_strict(
     legal_moves: List[str],
     logs: dict,
 ) -> Tuple[float, dict]:
-    """
-    Validates a chess move for a given FEN string and assigns a score based on the validation rules.
+    """Validates a chess move for a given FEN and assigns a score based on the rules.
     
     Args:
         fen (str): The FEN string representing the board state.
@@ -188,11 +146,9 @@ def validate_chess_move_strict(
     use_answer_reward = False
     move_qvalue = 0
 
-    # strong penalty for
-    # 1. not following san format
-    # 2. following san format but illegal move
+    # Strong penalty for (1) not following the SAN format and (2) illegal moves.
     try:
-        move_uci  = board.parse_san(move).uci()
+        _ = board.parse_san(move).uci()
     except ValueError:
         return use_answer_reward, 0.0, logs
     
@@ -213,8 +169,7 @@ def validate_chess_move_strict(
 
 
 def validate_english_text(text: str, lg_detector: torch.nn.Module, logs: dict, threshold: float = 0.9) -> Tuple[float, dict]:
-    """
-    Validates that the generated text contains only ASCII characters.
+    """Validates that the generated text contains only ASCII characters.
     
     Args:
         text (str): The generated text.
@@ -227,11 +182,11 @@ def validate_english_text(text: str, lg_detector: torch.nn.Module, logs: dict, t
     """
     use_english_reward = False
 
-    # Process the text
+    # Process the text.
     with torch.inference_mode():
         doc = lg_detector(text)
         
-    # The language detector returns a dictionary with keys 'language' and 'score'
+    # The language detector returns a dictionary with keys 'language' and 'score'.
     detected_lang = doc._.language["language"]
     score = doc._.language["score"]
 
@@ -254,11 +209,9 @@ def compute_score(
     answer_reward: float = 1.0,
     qvalue_reward_scaler: float = 1.0,
 ) -> float:
-    """
-    Computes comprehensive score for model response.
-    """
+    """Computes comprehensive score for model response."""
 
-    # Parse ground truth data
+    # Parse ground truth data.
     board_fen = ground_truth_dict["board_fen"]
     next_move_san = ground_truth_dict["next_move_san"]
     legal_moves_san = ground_truth_dict["legal_moves_san"]
@@ -275,14 +228,14 @@ def compute_score(
         "optimal/21_30_moves": 0, "optimal/31_40_moves": 0, "optimal/over40_moves": 0,
     }
 
-    # Extract model answer (pass logs to the function)
+    # Extract model answer (pass logs to the function).
     answer_text, processed_str, logs = extract_solution(solution_str, logs)
     
-    # Validate response structure
+    # Validate response structure.
     format_correct, logs = validate_response_structure(processed_str, logs)
     use_format_reward = True if format_correct else False
 
-    # Validate English text
+    # Validate English text.
     use_english_reward = False
     if answer_text:
         use_english_reward, logs = validate_english_text(
