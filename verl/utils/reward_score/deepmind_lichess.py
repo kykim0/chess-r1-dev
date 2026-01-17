@@ -12,11 +12,13 @@ def compute_score(
     # Parse ground truth data.
     answer = ground_truth_dict["answer"]
 
-    # Initialize log metrics
+    # Initialize log metrics.
+    # Note that when evaluating on multiple datasets, the log dict keys need
+    # to match across datasets to appease _validate() in ray_trainer.py.
     logs = {"format": 0, "accuracy": 0}
 
     # Extract model answer (pass logs to the function)
-    answer_text, processed_str, logs = extract_solution(solution_str, logs)
+    answer_text, _, logs = extract_solution(solution_str, logs)
 
     reward = 0.0
     correct = 0.0
