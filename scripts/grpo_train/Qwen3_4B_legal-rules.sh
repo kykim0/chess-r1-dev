@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=r1
+#SBATCH --job-name=cr1_opt-moves
 #SBATCH --output=/home/kykim/slurm-logs/%x-%j-test.out
 #SBATCH --error=/home/kykim/slurm-logs/%x-%j-test.err
 #SBATCH --nodes=1
@@ -8,19 +8,12 @@
 #SBATCH --mem-per-gpu=32G
 #SBATCH --time=72:00:00
 #SBATCH --nodelist=
-#SBATCH --exclude=node4
-
-export WANDB_API_KEY=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
+#SBATCH --exclude=
 
 export HYDRA_FULL_ERROR=1
-# export NCCL_DEBUG=INFO
-# export NCCL_DEBUG_SUBSYS=ALL
-# export TORCH_DISTRIBUTED_DEBUG=DETAIL
-# export NCCL_P2P_DISABLE=1
-# export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Environment variables
-export N_GPUS=2 # number of gpus
+# Environment variables.
+export N_GPUS=4
 unset ROCR_VISIBLE_DEVICES
 unset HIP_VISIBLE_DEVICES
 export CUDA_VISIBLE_DEVICES=$(seq -s, 0 $((N_GPUS-1)))
@@ -29,14 +22,12 @@ export ROLLOUT_TP_SIZE=1  # Set tensor parallel
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 # Define model and dataset
-export DATA_DIR=${DATA_DIR:-"data/qwen3"}
+export DATA_DIR=${DATA_DIR:-"data/verl"}
 export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-4B"}
 
 # Experiment metadata
-# export USER_NAME=${USER_NAME:-"USER"}
 export PROJECT_NAME=${PROJECT_NAME:-"chess-r1"}
-# export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Nochessdata_yesreastemp_fen_legal_rule_yesRLfeedback"}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"Qwen3-4B"}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"legal-rules"}
 
 timestamp=$(date +"%m%d-%H%M")
 DATA_NAME=$(basename "$DATA_DIR")       
@@ -53,18 +44,18 @@ hydra_args="
 trainer_args=" \
     trainer.project_name=$PROJECT_NAME \
     trainer.experiment_name=$EXPERIMENT_NAME \
-    trainer.logger=[wandb] \
+    trainer.logger=['wandb'] \
     trainer.n_gpus_per_node=$N_GPUS \
     trainer.nnodes=1 \
-    trainer.save_freq=2 \
-    trainer.test_freq=2 \
-    trainer.total_training_steps=4 \
+    trainer.save_freq=10 \
+    trainer.test_freq=10 \
+    trainer.total_training_steps=100 \
     trainer.resume_from_path=False \
     trainer.default_local_dir=$CHECKPOINT_DIR \
     trainer.val_before_train=true \
     trainer.max_actor_ckpt_to_keep=1 \
     trainer.rollout_data_dir=$LOG_DIR/rollouts \
-    trainer.log_val_generations=12 \
+    trainer.log_val_generations=1024 \
 "
 
 # batch_size: data.train_batch_size * actor.num_response
@@ -73,14 +64,12 @@ trainer_args=" \
 # actor.micro_batch_size_per_gpu: batch size per gpu for gradient accum
 # updates per rollout: actor.epochs * (batch_size / actor.mini_batch_size)
 data_args=" \
-    data.train_files=$DATA_DIR/train.parquet \
-    data.val_files=$DATA_DIR/valid.parquet \
+    data.train_files=$DATA_DIR/train_legal-rules-detailed.parquet \
+    data.val_files=$DATA_DIR/valid_legal-rules-detailed.parquet \
     data.train_batch_size=128 \
-    data.val_max_samples=1024 \
     data.max_prompt_length=1024 \
-    data.max_response_length=8192 \
+    data.max_response_length=4096 \
     data.dataloader_num_workers=0 \
-    data.return_full_prompt=true \
 "
 
 actor_args=" \
@@ -88,7 +77,7 @@ actor_args=" \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_epochs=1 \
     actor_rollout_ref.actor.ppo_mini_batch_size=128 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
@@ -99,21 +88,19 @@ actor_args=" \
 rollout_args=" \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
-    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=8 \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=$ROLLOUT_TP_SIZE \
     actor_rollout_ref.rollout.n=8 \
-    actor_rollout_ref.rollout.max_num_batched_tokens=16384 \
-    actor_rollout_ref.rollout.max_model_len=16384 \
 "
 
 reference_args=" \
-    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=8 \
+    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
 "
 
 algorithm_args=" \
     algorithm.gamma=1.0 \
-    algorithm.filter_groups.enable=true \
+    algorithm.filter_groups.enable=false \
     algorithm.filter_groups.max_num_gen_batches=10 \
 "
 
@@ -131,4 +118,4 @@ ray stop --force && ray start --head --include-dashboard=True
 # Create log directory if it doesn't exist
 mkdir -p ${LOG_DIR}
 
-python -m verl.trainer.main_ppo --config-name grpo_trainer $TRAIN_ARGS 2>&1 | tee ${LOG_DIR}/verl_demo.log
+python -m verl.trainer.main_ppo --config-name grpo_trainer $TRAIN_ARGS 2>&1 | tee ${LOG_DIR}/main_ppo.log
