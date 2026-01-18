@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cr1_opt-moves
+#SBATCH --job-name=cr1_next-state
 #SBATCH --output=/home/kykim/slurm-logs/%x-%j-test.out
 #SBATCH --error=/home/kykim/slurm-logs/%x-%j-test.err
 #SBATCH --nodes=1
@@ -27,7 +27,7 @@ export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-8B"}
 
 # Experiment metadata
 export PROJECT_NAME=${PROJECT_NAME:-"chess-r1"}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"legal-rules"}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"next-state"}
 
 timestamp=$(date +"%m%d-%H%M")
 DATA_NAME=$(basename "$DATA_DIR")       
@@ -64,8 +64,8 @@ trainer_args=" \
 # actor.micro_batch_size_per_gpu: batch size per gpu for gradient accum
 # updates per rollout: actor.epochs * (batch_size / actor.mini_batch_size)
 data_args=" \
-    data.train_files=$DATA_DIR/train_legal-rules-detailed.parquet \
-    data.val_files=$DATA_DIR/valid_legal-rules-detailed.parquet \
+    data.train_files=$DATA_DIR/train_next-state.parquet \
+    data.val_files=[$DATA_DIR/valid_next-state.parquet] \
     data.train_batch_size=128 \
     data.max_prompt_length=1024 \
     data.max_response_length=4096 \
