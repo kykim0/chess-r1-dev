@@ -250,6 +250,8 @@ class ChessRewardManager(AbstractRewardManager):
                     solution_str=sequences_str,
                     ground_truth_dict=ground_truth_dict,
                     data_source=data_source,
+                    format_reward=self.format_reward,
+                    answer_reward=self.answer_reward,
                 )
 
             reward_tensor[i, valid_response_length - 1] = score

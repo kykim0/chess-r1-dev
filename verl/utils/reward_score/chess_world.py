@@ -3,6 +3,10 @@ from typing import Dict
 import chess
 
 from verl.utils.reward_score.chess_utils import extract_solution
+from verl.utils.reward_score.chess_utils import (
+    extract_solution,
+    validate_response_structure,
+)
 
 
 def f1_score(ground_truth_list, predicted_list):
@@ -23,6 +27,8 @@ def compute_score(
     solution_str: str,
     ground_truth_dict: Dict[str, str],
     data_source: str,
+    format_reward: float = 0.1,
+    answer_reward: float = 1.0,
 ) -> float:
     """Computes comprehensive score for model response."""
     # Parse ground truth data.
@@ -45,7 +51,11 @@ def compute_score(
     logs = {"format": 0, "accuracy": 0}
 
     # Extract model answer (pass logs to the function).
-    answer_text, _, logs = extract_solution(solution_str, logs)
+    answer_text, processed_str, logs = extract_solution(solution_str, logs)
+
+    # Validate response structure.
+    format_correct, logs = validate_response_structure(processed_str, logs)
+    use_format_reward = True if format_correct else False
 
     reward = 0.0
     correct = 0.0
@@ -63,4 +73,5 @@ def compute_score(
     except Exception as e:
         print("\n[Content Validation] Skipped due to format errors or missing answer:", e)                
 
-    return reward, correct, logs
+    total_reward = use_format_reward * format_reward + reward
+    return total_reward, correct, logs
