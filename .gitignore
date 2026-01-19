@@ -130,7 +130,7 @@ core
 searchless_chess/checkpoints
 searchless_chess/data
 chess_dataset/
-*.csv
+# *.csv
 *.zst
 **.jsonl**
 **.json**
@@ -145,3 +145,7 @@ _site
 Gemfile.lock
 vendor
 
+_/
+outputs/
+raw_data/
+tensorboard_log/
