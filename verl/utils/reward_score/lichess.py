@@ -5,48 +5,10 @@ import numpy as np
 import torch
 
 from searchless_chess.src.engines import engine
-from verl.utils.reward_score.chess_utils import extract_solution
-
-
-def validate_response_structure(processed_str: str, logs: dict) -> Tuple[bool, dict]:
-    """Performs comprehensive validation of response structure.
-    
-    Args:
-        processed_str: Processed response string from the model
-        logs: Dictionary to store logging metrics.
-        
-    Returns:
-        Tuple (validation_passed, logs)
-    """
-    validation_passed = True
-
-    # Check required tags.
-    tags = {
-        "think_start": ("<think>", 1),
-        "think_end": ("</think>", 1),
-        "answer_start": ("<answer>", 1),
-        "answer_end": ("</answer>", 1)
-    }
-
-    positions = {}
-    for tag_name, (tag_str, expected_count) in tags.items():
-        count = processed_str.count(tag_str)
-        positions[tag_name] = processed_str.find(tag_str)
-        if count != expected_count:
-            validation_passed = False
-            logs["format"] = 0
-            return validation_passed, logs
-
-    # Verify tag order: <think> ... </think> ... <answer> ... </answer>
-    if (positions["think_start"] > positions["think_end"] or
-        positions["think_end"] > positions["answer_start"] or
-        positions["answer_start"] > positions["answer_end"]):
-        validation_passed = False
-        logs["format"] = 0
-    else:
-        logs["format"] = 1
-    
-    return validation_passed, logs
+from verl.utils.reward_score.chess_utils import (
+    extract_solution,
+    validate_response_structure,
+)
 
 
 def _update_optimal_logs(num_legal_moves: int, logs: dict) -> None:
@@ -119,7 +81,7 @@ def validate_chess_move_qvalue(
     move_rank = int(np.where(sorted_win_indices == selected_index)[0][0]) + 1 
     # Normalizes the rank into a score between 0 and 1, where 1 means we've done well, and 0 means we've done really bad
     logs["normalized_rank"] = (chess_model_qvalues.shape[0] - move_rank)/chess_model_qvalues.shape[0]
-    
+
     return use_answer_reward, move_qvalue, logs
 
 
@@ -230,7 +192,7 @@ def compute_score(
 
     # Extract model answer (pass logs to the function).
     answer_text, processed_str, logs = extract_solution(solution_str, logs)
-    
+
     # Validate response structure.
     format_correct, logs = validate_response_structure(processed_str, logs)
     use_format_reward = True if format_correct else False
@@ -271,9 +233,11 @@ def compute_score(
         qvalue_reward = 0.0
         print("\n[Content Validation] Skipped due to format errors or missing answer:", e)
 
-    total_reward = use_format_reward * format_reward + \
-                    use_english_reward * english_reward + \
-                    use_answer_reward * answer_reward + \
-                    qvalue_reward_scaler * qvalue_reward
-    
+    total_reward = (
+        use_format_reward * format_reward +
+        use_english_reward * english_reward +
+        use_answer_reward * answer_reward +
+        qvalue_reward_scaler * qvalue_reward
+    )
+
     return total_reward, use_answer_reward, logs
