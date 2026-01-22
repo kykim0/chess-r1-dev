@@ -156,8 +156,7 @@ def validate_english_text(text: str, lg_detector: torch.nn.Module, logs: dict, t
         use_english_reward = True
     else:
         use_english_reward = False
-    logs['english'] = use_english_reward
-
+    logs["english"] = use_english_reward
     return use_english_reward, logs
 
 
@@ -172,7 +171,6 @@ def compute_score(
     qvalue_reward_scaler: float = 1.0,
 ) -> float:
     """Computes comprehensive score for model response."""
-
     # Parse ground truth data.
     board_fen = ground_truth_dict["board_fen"]
     next_move_san = ground_truth_dict["next_move_san"]

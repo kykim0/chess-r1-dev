@@ -79,6 +79,35 @@ def _select_rm_score_fn(data_source):
         raise NotImplementedError
 
 
+def update_per_sample_metrics(
+    per_sample_metrics: dict[str, list],
+    reward_logs: dict[str, any],
+    sample_idx: int,
+) -> None:
+    """Updates per_sample_metrics with values from reward_logs, padding with None as needed.
+
+    This ensures all keys in per_sample_metrics have the same length after
+    each call, which is required for mixed-dataset batches where different
+    samples may return different sets of auxiliary metrics.
+
+    Args:
+        per_sample_metrics: Dict accumulating metrics across samples.
+        reward_logs: Metrics returned for the current sample.
+        sample_idx: Index of the current sample in the batch.
+    """
+    # For keys in reward_logs: backfill with None if this is a new key, then append value
+    for key, value in reward_logs.items():
+        if key not in per_sample_metrics:
+            # New key: backfill with None for all previous samples
+            per_sample_metrics[key] = [None] * sample_idx
+        per_sample_metrics[key].append(value)
+
+    # For keys we've seen before but aren't in this sample's reward_logs: append None
+    for key in per_sample_metrics:
+        if key not in reward_logs:
+            per_sample_metrics[key].append(None)
+
+
 # TODO(kykim): Clean up the aggregate reward logic.
 
 
@@ -257,8 +286,8 @@ class ChessRewardManager(AbstractRewardManager):
             reward_tensor[i, valid_response_length - 1] = score
             correct_seq_tensor[i] = correct_seq
 
-            for key, value in reward_logs.items():
-                per_sample_metrics[key].append(value)
+            # Update per-sample metrics with proper None padding for mixed datasets.
+            update_per_sample_metrics(per_sample_metrics, reward_logs, i)
 
             # Aggregate logging metrics.
             for key, value in reward_logs.items():
@@ -358,8 +387,8 @@ class LichessRewardManager(AbstractRewardManager):
             correct_seq_tensor[i] = correct_seq
             per_id_flags[pid].append(bool(correct_seq))
 
-            for key, value in reward_logs.items():
-                per_sample_metrics[key].append(value)
+            # Update per-sample metrics with proper None padding for mixed datasets.
+            update_per_sample_metrics(per_sample_metrics, reward_logs, i)
 
             # Aggregate logging metrics.
             for key, value in reward_logs.items():
@@ -473,8 +502,8 @@ class ChessSFTRewardManager(AbstractRewardManager):
             
             correct_seq_tensor[i] = correct_seq
 
-            for key, value in reward_logs.items():
-                per_sample_metrics[key].append(value)
+            # Update per-sample metrics with proper None padding for mixed datasets.
+            update_per_sample_metrics(per_sample_metrics, reward_logs, i)
 
             # Aggregate logging metrics.
             for key, value in reward_logs.items():

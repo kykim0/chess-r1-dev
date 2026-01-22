@@ -1,8 +1,5 @@
 from typing import Dict
 
-import chess
-
-from verl.utils.reward_score.chess_utils import extract_solution
 from verl.utils.reward_score.chess_utils import (
     extract_solution,
     validate_response_structure,
@@ -33,9 +30,7 @@ def compute_score(
     """Computes comprehensive score for model response."""
     # Parse ground truth data.
     if "next_state" in data_source:
-        board = chess.Board(ground_truth_dict["board_fen"])
-        board.push_san(ground_truth_dict["next_move_san"])
-        answer = board.fen()  # Next state in FEN.
+        answer = ground_truth_dict["next_board_fen"]
     elif "legal_moves" in data_source:
         answer = ground_truth_dict["legal_moves_san"].split()
     elif "state_f2a" in data_source:
@@ -48,10 +43,12 @@ def compute_score(
     # Initialize log metrics.
     # Note that when evaluating on multiple datasets, the log dict keys need
     # to match across datasets to appease _validate() in ray_trainer.py.
-    logs = {"format": 0, "accuracy": 0}
+    logs = {"answer_text": "", "format": 0, "accuracy": 0}
 
     # Extract model answer (pass logs to the function).
     answer_text, processed_str, logs = extract_solution(solution_str, logs)
+    if answer_text:
+        logs["answer_text"] = answer_text
 
     # Validate response structure.
     format_correct, logs = validate_response_structure(processed_str, logs)

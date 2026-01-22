@@ -10,15 +10,17 @@ def compute_score(
 ) -> float:
     """Computes comprehensive score for model response."""
     # Parse ground truth data.
-    answer = ground_truth_dict["answer"]
+    answer = ground_truth_dict["next_move_san"]
 
     # Initialize log metrics.
     # Note that when evaluating on multiple datasets, the log dict keys need
     # to match across datasets to appease _validate() in ray_trainer.py.
-    logs = {"format": 0, "accuracy": 0}
+    logs = {"answer_text": "", "format": 0, "accuracy": 0}
 
     # Extract model answer (pass logs to the function)
     answer_text, _, logs = extract_solution(solution_str, logs)
+    if answer_text:
+        logs["answer_text"] = answer_text
 
     reward = 0.0
     correct = 0.0

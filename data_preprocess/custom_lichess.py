@@ -14,6 +14,7 @@ import argparse
 from collections import defaultdict
 import os
 
+import chess
 from datasets import Dataset
 import pandas as pd
 
@@ -303,6 +304,9 @@ if __name__ == "__main__":
     def make_map_fn(split):
         def process_fn(example, idx):
             messages = make_conversation(example, config, data_source)
+            board = chess.Board(example["board_fen"])
+            board.push_san(example["next_move_san"])
+            next_board_fen = board.fen()
             data = {
                 "data_source": data_source,  # lichess, deepmind_lichess_accuracy
                 "prompt": messages,
@@ -311,9 +315,9 @@ if __name__ == "__main__":
                     "style": "rule",
                     "ground_truth": {
                         "id": example["id"],
-                        "answer": example["next_move_san"],
                         "rating": example["rating"],
                         "board_fen": example["board_fen"],
+                        "next_board_fen": next_board_fen,
                         "board_str": example["board_str"],
                         "next_move_san": example["next_move_san"],
                         "legal_moves_san": example["legal_moves_san"],

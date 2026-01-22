@@ -356,6 +356,74 @@ def _flatten_dict(raw: dict[str, Any], *, sep: str) -> dict[str, Any]:
     return ans
 
 
+def _infer_nested_types(all_scores):
+    """Infers types for all keys in score dicts."""
+    key_types = {}
+    for score in all_scores:
+        if not isinstance(score, dict):
+            continue
+        for key, value in score.items():
+            if value is None:
+                continue
+            if key in key_types:
+                continue
+            key_types[key] = type(value)
+    return key_types
+
+
+def _sanitize_value(value, expected_type):
+    """Sanitizes a single value based on expected type."""
+    if value is not None:
+        return value
+    if expected_type == str:
+        return ""
+    if expected_type in (int, float):
+        return float("nan")
+    return None
+
+
+def _sanitize_samples_for_wandb(samples):
+    """Sanitize all samples for wandb table logging.
+
+    Infers types from non-None values and uses appropriate defaults:
+    - Strings -> ""
+    - Numbers -> float('nan')
+    - Dicts -> recursively sanitize with consistent keys and types
+
+    This handles nested dicts (e.g., score dicts containing answer_text, reward, etc.)
+    where some values may be None in some samples but have actual values in others.
+    """
+    if not samples:
+        return samples
+
+    # Collect all score dicts to infer types.
+    # Note: samples is a list of tuples: (input, output, score).
+    all_scores = [s[2] for s in samples if len(s) > 2]
+
+    # Infer types for each key, including nested dict keys
+    key_types = _infer_nested_types(all_scores)
+
+    # Sanitize each sample.
+    sanitized_samples = []
+    for sample in samples:
+        if len(sample) < 3:
+            sanitized_samples.append(sample)
+            continue
+
+        inp, out, score = sample[0], sample[1], sample[2]
+        if score is None:
+            # Entire score is None - create a dict with appropriate defaults.
+            sanitized_score = {}
+            for key, typ_info in key_types.items():
+                sanitized_score[key] = _sanitize_value(None, typ_info)
+        else:
+            sanitized_score = score
+
+        sanitized_samples.append((inp, out, sanitized_score))
+
+    return sanitized_samples
+
+
 @dataclasses.dataclass
 class ValidationGenerationsLogger:
     local_dir: str = None
@@ -389,6 +457,8 @@ class ValidationGenerationsLogger:
 
     def _log_generations_to_wandb(self, samples, step, wandb):
         """Log samples to wandb as a table"""
+        # Sanitize samples to handle None values with consistent types
+        samples = _sanitize_samples_for_wandb(samples)
 
         # Create column names for all samples
         columns = ["step"] + sum(
