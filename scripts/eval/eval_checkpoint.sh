@@ -3,10 +3,10 @@
 #SBATCH --output=/home/kykim/slurm-logs/%x-%j.out
 #SBATCH --error=/home/kykim/slurm-logs/%x-%j.err
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:a6000:4
+#SBATCH --gres=gpu:a6000:2
 #SBATCH --cpus-per-gpu=16
 #SBATCH --mem-per-gpu=32G
-#SBATCH --time=4:00:00
+#SBATCH --time=24:00:00
 
 # Usage examples:
 # $ bash scripts/eval/eval_checkpoint.sh Qwen/Qwen3-0.6B data/verl/valid_next-state.parquet 2 4
@@ -17,13 +17,22 @@
 # Parse arguments.
 CHECKPOINT_PATH=${1:?"Error: Checkpoint path is required"}
 EVAL_DATA=${2:?"Error: Eval data is required"}
-N_GPUS=${3:-4}
+N_GPUS=${3:-0}
 NUM_SAMPLES=${4:--1}
 
 # Validate eval data.
 if [ ! -f "$EVAL_DATA" ]; then
     echo "Error: Evaluation data file does not exist: $EVAL_DATA"
     exit 1
+fi
+
+if [ -z "$N_GPUS" ] || [ "$N_GPUS" -eq 0 ]; then
+    if command -v nvidia-smi &> /dev/null; then
+        N_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+    else
+        echo "Warning: nvidia-smi not found. Defaulting N_GPUS to 0."
+        N_GPUS=0
+    fi
 fi
 
 export HYDRA_FULL_ERROR=1

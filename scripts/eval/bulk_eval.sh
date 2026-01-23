@@ -10,9 +10,9 @@
 
 EXPERIMENT_DIR=${1:?"Error: Experiment dir is required"}
 EVAL_DATA=${2:-""}
-N_GPUS=${3:-""} # Leave empty to trigger auto-detection logic below
+N_GPUS=${3:-""}
 
-# 2. Handle EVAL_DATA (Convert to Array)
+
 if [ -z "$EVAL_DATA" ]; then
     EVAL_DATA=(
         "data/verl/valid_legal-rules-detailed.parquet"
@@ -27,7 +27,6 @@ if [ -z "$N_GPUS" ] || [ "$N_GPUS" -eq 0 ]; then
     if command -v nvidia-smi &> /dev/null; then
         N_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
     else
-        echo "Warning: nvidia-smi not found. Defaulting N_GPUS to 0."
         N_GPUS=0
     fi
 fi
@@ -35,8 +34,10 @@ fi
 # Evaluate all checkpoints on all eval data.
 for CKPT_DIR in $(ls -d $EXPERIMENT_DIR/checkpoint/global_step_*); do
     for EVAL_DATUM in "${EVAL_DATA[@]}"; do
-        bash scripts/eval/eval_checkpoint.sh $CKPT_DIR/actor/huggingface $EVAL_DATUM $N_GPUS
-        break
+        FILE_NAME=$(basename "$EVAL_DATUM" .parquet)
+        if [ ! -f ${CKPT_DIR}/actor/eval_results/${FILE_NAME}_eval.json ]; then
+            # bash scripts/eval/eval_checkpoint.sh $CKPT_DIR/actor/huggingface $EVAL_DATUM $N_GPUS
+            sbatch -J eval scripts/eval/eval_checkpoint.sh $CKPT_DIR/actor/huggingface $EVAL_DATUM 0
+        fi
     done
-    break
 done
