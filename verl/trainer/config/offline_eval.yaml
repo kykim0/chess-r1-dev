@@ -1,0 +1,100 @@
+# Offline eval configs.
+#
+# IMPORTANT: We inherit from grpo_trainer to ensure we use the exact same
+# reward scoring configuration as training. We then override training-specific
+# settings to disable them.
+
+defaults:
+  # Inherit full grpo_trainer config to get consistent reward_model settings
+  - grpo_trainer
+  
+  # load the reference default config, then apply the fields in the current yaml
+  - _self_
+
+actor_rollout_ref:
+  # Model path - must be specified via command line
+  model:
+    path: null
+
+  # Actor config - provide dummy values to pass validation
+  # (not used in eval, but config validation requires them)
+  actor:
+    ppo_micro_batch_size_per_gpu: 4
+    ppo_mini_batch_size: 128
+    ppo_epochs: 1
+
+  # Rollout config overrides for eval
+  rollout:
+    gpu_memory_utilization: 0.8
+    # Validation-specific kwargs
+    val_kwargs:
+      n: 1
+      do_sample: true
+      temperature: 0.7
+      top_p: 0.95
+      top_k: -1
+
+# Data configuration overrides for eval
+data:
+  # Evaluation data files - must be specified via command line
+  eval_files: null
+  
+  # Provide dummy train_batch_size to pass validation
+  train_batch_size: 128
+  
+  # Batch size for evaluation
+  eval_batch_size: 32
+  
+  # Maximum number of samples to evaluate (-1 for all)
+  max_samples: -1
+
+# Reward model - inherit from grpo_trainer but ensure evaluation section exists
+reward_model:
+  # We don't use model-based RM in eval, just rule-based scoring
+  enable: false
+  enable_resource_pool: false
+
+# Evaluation-specific settings
+eval:
+  # Number of generation samples per prompt (for pass@k metrics)
+  n_samples: 1
+
+  # Whether to compute pass@k metrics
+  compute_pass_at_k: false
+  pass_k_values: [1, 5, 10]
+
+  # Output settings
+  output_dir: null  # If null, outputs to model checkpoint directory
+  output_file: "eval.json"
+
+  # Whether to save generations
+  save_generations: true
+  generations_file: "raw.jsonl"
+
+  # Whether to print detailed metrics
+  verbose: true
+
+# Trainer overrides for eval
+trainer:
+  project_name: offline_eval
+  experiment_name: eval_run
+  
+  # Default to single node, can override via command line
+  nnodes: 1
+  n_gpus_per_node: 4
+  
+  # Disable training-specific logging
+  logger: ["console"]
+  
+  # Disable checkpointing
+  save_freq: -1
+  test_freq: -1
+
+# Transfer queue (disabled for eval)
+transfer_queue:
+  enable: false
+
+# Global profiler (disabled for eval)
+global_profiler:
+  tool: null
+  steps: null
