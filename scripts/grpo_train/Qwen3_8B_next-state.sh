@@ -10,11 +10,8 @@
 #SBATCH --nodelist=
 #SBATCH --exclude=
 
-<<<<<<< HEAD
-=======
-MAX_LEN=${1:-4096}
+MAX_LEN=${1:-2048}
 
->>>>>>> 33de7be53a807609fb198f4bfb6c4458242758f3
 export HYDRA_FULL_ERROR=1
 
 # Environment variables.
@@ -32,11 +29,7 @@ export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-8B"}
 
 # Experiment metadata
 export PROJECT_NAME=${PROJECT_NAME:-"chess-r1"}
-<<<<<<< HEAD
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"next-state"}
-=======
 export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"next-state_l${MAX_LEN}"}
->>>>>>> 33de7be53a807609fb198f4bfb6c4458242758f3
 
 timestamp=$(date +"%m%d-%H%M")
 DATA_NAME=$(basename "$DATA_DIR")       
@@ -77,11 +70,7 @@ data_args=" \
     data.val_files=[$DATA_DIR/valid_next-state.parquet] \
     data.train_batch_size=128 \
     data.max_prompt_length=1024 \
-<<<<<<< HEAD
-    data.max_response_length=4096 \
-=======
     data.max_response_length=${MAX_LEN} \
->>>>>>> 33de7be53a807609fb198f4bfb6c4458242758f3
     data.dataloader_num_workers=0 \
 "
 

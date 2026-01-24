@@ -15,7 +15,7 @@ MAX_LEN=${1:-2048}
 export HYDRA_FULL_ERROR=1
 
 # Environment variables.
-export N_GPUS=4
+export N_GPUS=8
 unset ROCR_VISIBLE_DEVICES
 unset HIP_VISIBLE_DEVICES
 export CUDA_VISIBLE_DEVICES=$(seq -s, 0 $((N_GPUS-1)))
@@ -29,12 +29,12 @@ export BASE_MODEL=${BASE_MODEL:-"Qwen/Qwen3-8B"}
 
 # Experiment metadata.
 export PROJECT_NAME=${PROJECT_NAME:-"chess-r1"}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"legal-rules_l${MAX_LEN}"}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-"legal-rules_next-state_l${MAX_LEN}"}
 
 timestamp=$(date +"%m%d-%H%M")
-DATA_NAME=$(basename "$DATA_DIR")       
+DATA_NAME=$(basename "$DATA_DIR")
 BASE_MODEL_NAME=$(basename "$BASE_MODEL")
-export EXPERIMENT_NAME="${timestamp}_${EXPERIMENT_NAME}_${DATA_NAME}_${BASE_MODEL_NAME}"
+export EXPERIMENT_NAME="${timestamp}_${EXPERIMENT_NAME}_${BASE_MODEL_NAME}"
 export LOG_DIR="outputs/${PROJECT_NAME}/${EXPERIMENT_NAME}"
 export CHECKPOINT_DIR="${LOG_DIR}/checkpoint"
 
@@ -52,7 +52,7 @@ trainer_args=" \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.total_training_steps=100 \
-    trainer.resume_from_path=False \
+    trainer.resume_mode=auto \
     trainer.default_local_dir=$CHECKPOINT_DIR \
     trainer.val_before_train=true \
     trainer.max_actor_ckpt_to_keep=1 \
@@ -66,8 +66,8 @@ trainer_args=" \
 # actor.micro_batch_size_per_gpu: batch size per gpu for gradient accum
 # updates per rollout: actor.epochs * (batch_size / actor.mini_batch_size)
 data_args=" \
-    data.train_files=$DATA_DIR/train_legal-rules-detailed.parquet \
-    data.val_files=$DATA_DIR/valid_legal-rules-detailed.parquet \
+    data.train_files=[$DATA_DIR/train_next-state.parquet,$DATA_DIR/train_legal-rules-detailed.parquet] \
+    data.val_files=[$DATA_DIR/valid_next-state.parquet,$DATA_DIR/valid_legal-rules-detailed.parquet] \
     data.train_batch_size=128 \
     data.max_prompt_length=1024 \
     data.max_response_length=${MAX_LEN} \
