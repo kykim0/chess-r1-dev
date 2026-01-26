@@ -510,6 +510,38 @@ class RayPPOTrainer:
         # Log to each configured logger
         self.validation_generations_logger.log(self.config.trainer.logger, samples, self.global_steps)
 
+    def _get_dynamic_response_length(self) -> int | None:
+        """Get dynamic response length based on current training step.
+
+        This enables curriculum learning over reasoning trace length.
+
+        Configure via trainer.response_length_schedule in config:
+            - If not set, returns None (uses default from rollout config)
+            - Format: list of (step_threshold, response_length) tuples
+              e.g., [(0, 512), (50, 1024), (100, 2048)]
+              means: steps 0-49 use 512, steps 50-99 use 1024, steps 100+ use 2048
+
+        Returns:
+            int | None: The response length for the current step, or None to use default
+        """
+        schedule = self.config.trainer.get("response_length_schedule", None)
+        if schedule is None:
+            return None
+
+        # Schedule is a list of (step_threshold, response_length) pairs sorted by step.
+        # Find the highest threshold that's <= current global_steps.
+        current_length = None
+        for step_threshold, length in sorted(schedule, key=lambda x: x[0]):
+            if self.global_steps >= step_threshold:
+                current_length = length
+            else:
+                break
+
+        if current_length is not None:
+            print(f"[Dynamic Response Length] Step {self.global_steps}: using response_length={current_length}")
+
+        return current_length
+
     def _get_gen_batch(self, batch: DataProto) -> DataProto:
         reward_model_keys = set({"data_source", "reward_model", "extra_info", "uid"}) & batch.non_tensor_batch.keys()
 
@@ -1033,6 +1065,13 @@ class RayPPOTrainer:
 
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
+
+                # Dynamic response length scheduling based on training step.
+                # This enables curriculum learning over reasoning trace length.
+                dynamic_response_length = self._get_dynamic_response_length()
+                if dynamic_response_length is not None:
+                    gen_batch.meta_info["response_length"] = dynamic_response_length
+
                 gen_batch_output = gen_batch.repeat(
                     repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True
                 )

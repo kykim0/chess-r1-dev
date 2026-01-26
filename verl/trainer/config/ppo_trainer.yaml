@@ -220,6 +220,12 @@ trainer:
   #  mode: "auto", "enable", or "disable"
   use_legacy_worker_impl: auto
 
+  # Dynamic response length schedule for curriculum learning over reasoning trace length.
+  # Format: list of [step_threshold, response_length] pairs, e.g., [[1, 512], [51, 1024]]
+  # Steps are 1-indexed. At step S, the largest threshold <= S determines the response_length.
+  # If null, uses the static response_length from rollout config.
+  response_length_schedule: null
+
 # profiler configs
 global_profiler:
 

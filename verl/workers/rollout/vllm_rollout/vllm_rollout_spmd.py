@@ -369,6 +369,10 @@ class vLLMRollout(BaseRollout):
                 "n": 1,  # if validate, already repeat in ray_trainer
             }
 
+        # Support dynamic response_length override via meta_info (for curriculum/adaptive training).
+        response_length = prompts.meta_info.get("response_length", self.config.response_length)
+        kwargs["max_tokens"] = response_length
+
         lora_requests = None
         if self.lora_kwargs:
             lora_int_ids = list(self.inference_engine.llm_engine.list_loras())
@@ -402,19 +406,20 @@ class vLLMRollout(BaseRollout):
                             curr_log_prob.append(logprob[response_ids[i]].logprob)
                         rollout_log_probs.append(curr_log_prob)
 
-            response = pad_2d_list_to_length(response, self.pad_token_id, max_length=self.config.response_length).to(
+            # Use dynamic response_length for padding (supports adaptive length curriculum).
+            response = pad_2d_list_to_length(response, self.pad_token_id, max_length=response_length).to(
                 idx.device
             )
             if self.config.calculate_log_probs:
                 rollout_log_probs = pad_2d_list_to_length(
-                    rollout_log_probs, -1, max_length=self.config.response_length
+                    rollout_log_probs, -1, max_length=response_length
                 ).to(idx.device)
                 rollout_log_probs = rollout_log_probs.to(torch.float32)
 
             seq = torch.cat([idx, response], dim=-1)
 
-        response_length = response.size(1)
-        delta_position_id = torch.arange(1, response_length + 1, device=position_ids.device)
+        actual_response_length = response.size(1)
+        delta_position_id = torch.arange(1, actual_response_length + 1, device=position_ids.device)
         delta_position_id = delta_position_id.unsqueeze(0).expand(batch_size, -1)
         if position_ids.dim() == 3:  # qwen2vl mrope (batch size, 4, seq len)
             delta_position_id = delta_position_id.view(batch_size, 1, -1).expand(batch_size, position_ids.size(1), -1)

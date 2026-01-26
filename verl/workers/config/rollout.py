@@ -110,7 +110,7 @@ class PrometheusConfig(BaseConfig):
 
 @dataclass
 class RolloutConfig(BaseConfig):
-    _mutable_fields = {"max_model_len", "load_format"}
+    _mutable_fields = {"max_model_len", "load_format", "response_length"}
 
     name: Optional[str] = MISSING
     mode: str = "sync"
