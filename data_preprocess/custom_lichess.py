@@ -108,10 +108,10 @@ def _optimal_move_conv(example, config):
     return messages
 
 
-def _next_state_conv(example):
+def _next_state_conv(example, config):
     """Creates a conversation for the next state prediction task."""
 
-    def _system_message():
+    def _system_message(include_legal_moves):
         base_inst = (
             f"You are a helpful assistant with a strong understanding of chess. "
             f"Given a board state in FEN and a move in SAN, output the resulting board state in FEN after applying the move. "
@@ -119,18 +119,38 @@ def _next_state_conv(example):
         )
         reasoning_inst = f"The reasoning process should describe the analysis used to derive the next board state in FEN from the current position and move."
         format_inst = "The answer must be in FEN within <answer> </answer> tags, e.g., <answer> 6rk/ppp2R1p/7Q/4P3/8/2q4P/P5r1/5R1K b - - 1 27 </answer>."
+        context_info = "Now, the user provides the board in FEN format, the move in SAN"
+        if include_legal_moves:
+            context_info += ", and a list of possible next board states in FEN derived from legal moves"
+        context_info += "."
         system_message = "\n".join([base_inst, reasoning_inst, format_inst])
         return system_message.strip()
 
-    def _user_message(example):
+    def _user_message(example, include_legal_moves):
         board_fen = example["board_fen"]
         next_move_san = example["next_move_san"]
         user_content = f"Current board in FEN: {board_fen}."
         user_content += f"\nNext move in SAN: {next_move_san}."
+        if include_legal_moves:
+            next_state_fens = []
+            for move_san in example["legal_moves_san"].split():
+                board = chess.Board(example["board_fen"])
+                board.push_san(move_san)
+                next_state_fens.append(board.fen())
+            fens_str = ", ".join(next_state_fens)
+            user_content += f"\nPossible next board states in FEN: {fens_str}."
         return user_content
 
-    system_message = _system_message()
-    user_message = _user_message(example)
+    # Extract configs.
+    include_legal_moves = config.get("include_legal_moves", True)
+
+    system_message = _system_message(
+        include_legal_moves=include_legal_moves,
+    )
+    user_message = _user_message(
+        example,
+        include_legal_moves=include_legal_moves,
+    )
     messages = [
         {"role": "system", "content": system_message},
         {"role": "user", "content": user_message},
@@ -230,7 +250,7 @@ def make_conversation(example, config, data_source):
     if data_source in ("lichess", "deepmind_lichess_accuracy"):
         messages = _optimal_move_conv(example, config)
     elif data_source == "next_state":
-        messages = _next_state_conv(example)
+        messages = _next_state_conv(example, config)
     elif data_source == "legal_moves":
         messages = _legal_moves_conv(example)
     elif data_source == "state_f2a":
@@ -248,7 +268,7 @@ def parse_template_config(template_type):
         "include_legal_moves": False,
         "include_rules": False,
         "include_pgn": False,
-        "reasoning_detail": "standard"
+        "reasoning_detail": "standard",
     }
     if "legal" in template_type:
         config["include_legal_moves"] = True
